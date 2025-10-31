@@ -11,17 +11,6 @@ public class WorldGenerator : MonoBehaviour
         Stone,
         Bedrock
     }
-    struct Face
-    {
-        public int[] vertexIndices;
-        public Vector3 direction;
-
-        public Face(int[] vertexIndices, Vector3 dir)
-        {
-            this.vertexIndices = vertexIndices;
-            this.direction = dir;
-        }
-    }
 
     readonly Vector3[] vertexPos = new Vector3[8]
        {
@@ -37,6 +26,18 @@ public class WorldGenerator : MonoBehaviour
             new Vector3( 0.5f, -0.5f,  0.5f), // 6: Front-Right-Down
             new Vector3( 0.5f, -0.5f, -0.5f), // 7: Back-Right-Down
        };
+
+    struct Face
+    {
+        public int[] vertexIndices;
+        public Vector3 direction;
+
+        public Face(int[] vertexIndices, Vector3 dir)
+        {
+            this.vertexIndices = vertexIndices;
+            this.direction = dir;
+        }
+    }
 
     readonly Face[] faces = new Face[]
     {
@@ -57,7 +58,7 @@ public class WorldGenerator : MonoBehaviour
 
     List<Vector3> vertices = new List<Vector3>();
     List<int> triangles = new List<int>();
-    List<Vector2> uvs = new List<Vector2>();
+
     void Start()
     {
         GenerateMesh();
@@ -91,7 +92,6 @@ public class WorldGenerator : MonoBehaviour
         {
             vertices = vertices.ToArray(),
             triangles = triangles.ToArray(),
-            uv = uvs.ToArray()
         };
 
         mesh.RecalculateBounds();
@@ -104,30 +104,60 @@ public class WorldGenerator : MonoBehaviour
     {
         int vertIndex = vertices.Count;
         foreach (var i in face.vertexIndices)
+        {
             vertices.Add(vertexPos[i] + pos - new Vector3(0.5f, 0.5f, 0.5f));
+        }
 
         triangles.AddRange(new int[] { vertIndex, vertIndex + 1, vertIndex + 2, vertIndex + 2, vertIndex + 3, vertIndex });
-
-        // proste UV
-        uvs.Add(new Vector2(0, 0));
-        uvs.Add(new Vector2(0, 1));
-        uvs.Add(new Vector2(1, 1));
-        uvs.Add(new Vector2(1, 0));
     }
+    [SerializeField] Vector3 offset;
 
     Blocks GetBlock(Vector3Int coordinates)
     {
         float height = Mathf.Floor(Mathf.PerlinNoise(coordinates.x * 0.1f, coordinates.z * 0.1f) * 5f);
 
         if (coordinates.y > height)
+        {
+            if (Perlin3D((coordinates.x + offset.x) * 0.03f, (coordinates.y + offset.y) * 0.05f, (coordinates.z + offset.z) * 0.05f) >= 0.75f)
+            {
+                return Blocks.Dirt;
+            }
             return Blocks.Air;
-
-        float typeNoise = Mathf.PerlinNoise(coordinates.x * 0.3f, coordinates.z * 0.3f);
-
-        if (typeNoise > 0.6f)
-            return Blocks.Stone;
+        }
         else
+        {
             return Blocks.Dirt;
+        }
+
+
+
+        //float typeNoise = Mathf.PerlinNoise(coordinates.x * 0.3f, coordinates.z * 0.3f);
+
+        //if (typeNoise > 0.6f)
+        //    return Blocks.Stone;
+        //else
+        //    return Blocks.Dirt;
+    }
+
+    private void OnValidate()
+    {
+        if (meshFilter != null)
+        {
+            GenerateMesh();
+        }
+    }
+    public static float Perlin3D(float x, float y, float z)
+    {
+        float ab = Mathf.PerlinNoise(x, y);
+        float bc = Mathf.PerlinNoise(y, z);
+        float ac = Mathf.PerlinNoise(x, z);
+
+        float ba = Mathf.PerlinNoise(y, x);
+        float cb = Mathf.PerlinNoise(z, y);
+        float ca = Mathf.PerlinNoise(z, x);
+
+        float abc = ab + bc + ac + ba + cb + ca;
+        return abc / 6f;
     }
     private void OnDrawGizmos()
     {
@@ -139,16 +169,19 @@ public class WorldGenerator : MonoBehaviour
                 {
                     for (int z = 0; z < Dimensions.z; z++)
                     {
+                        if (GetBlock(new Vector3Int(x, y, z)) == Blocks.Air)
+                        {
+                            continue;
+                        }
                         Gizmos.color = GetBlock(new Vector3Int(x, y, z)) switch
                         {
-                            Blocks.Air => new Color(0, 1, 1, 0.25f),
                             Blocks.Grass => Color.green,
                             Blocks.Dirt => new Color(0.545f, 0.271f, 0.075f, 1),
                             Blocks.Stone => Color.gray,
                             Blocks.Bedrock => Color.black,
                             _ => Color.magenta,
                         };
-                        Gizmos.DrawWireSphere(new Vector3(x, y, z), 0.5f);
+                        Gizmos.DrawWireSphere(new Vector3(x, y, z) - new Vector3(0.5f, 0.5f, 0.5f), 0.5f);
                     }
                 }
             }
