@@ -11,28 +11,20 @@ public class WorldGenerator : MonoBehaviour
         Stone,
         Bedrock
     }
-
-    //TODO: change to vector3int later
-    [SerializeField] Vector3 Dimensions;
-    [SerializeField] MeshFilter meshFilter;
-
-    [SerializeField] bool showGizmos = false;
-    void Start()
+    struct Face
     {
-        GenerateMesh();
+        public int[] vertexIndices;
+        public Vector3 direction;
+
+        public Face(int[] vertexIndices, Vector3 dir)
+        {
+            this.vertexIndices = vertexIndices;
+            this.direction = dir;
+        }
     }
 
-    private void GenerateMesh()
-    {
-        List<Vector3> vertices = new List<Vector3>();
-        List<int> triangles = new List<int>();
-        List<int> uvs = new List<int>();
-
-        vertices.Clear();
-        triangles.Clear();
-
-        Vector3[] vertexPos = new Vector3[8]
-        {
+    readonly Vector3[] vertexPos = new Vector3[8]
+       {
             //TOP
             new Vector3(-0.5f,  0.5f, -0.5f), // 0: Back-Left-Up
             new Vector3(-0.5f,  0.5f,  0.5f), // 1: Front-Left-Up
@@ -44,17 +36,37 @@ public class WorldGenerator : MonoBehaviour
             new Vector3(-0.5f, -0.5f,  0.5f), // 5: Front-Left-Down
             new Vector3( 0.5f, -0.5f,  0.5f), // 6: Front-Right-Down
             new Vector3( 0.5f, -0.5f, -0.5f), // 7: Back-Right-Down
-        };
+       };
 
-        Face[] faces = new Face[]
-        {
+    readonly Face[] faces = new Face[]
+    {
             new Face(new int[]{0,1,2,3}, Vector3.up),    // top
             new Face(new int[]{5,4,7,6}, Vector3.down),  // bottom
             new Face(new int[]{1,5,6,2}, Vector3.forward), // front
             new Face(new int[]{3,7,4,0}, Vector3.back),    // back
             new Face(new int[]{2,6,7,3}, Vector3.right),   // right
             new Face(new int[]{0,4,5,1}, Vector3.left)     // left
-        };
+    };
+
+    //TODO: change to vector3int later
+    [SerializeField] Vector3 Dimensions;
+    [SerializeField] MeshFilter meshFilter;
+
+    [SerializeField] bool showGizmos = false;
+
+
+    List<Vector3> vertices = new List<Vector3>();
+    List<int> triangles = new List<int>();
+    List<Vector2> uvs = new List<Vector2>();
+    void Start()
+    {
+        GenerateMesh();
+    }
+
+    private void GenerateMesh()
+    {
+        vertices.Clear();
+        triangles.Clear();
 
         for (int x = 0; x < Dimensions.x; x++)
         {
@@ -65,109 +77,58 @@ public class WorldGenerator : MonoBehaviour
                     Vector3Int pos = new Vector3Int(x, y, z);
                     if (GetBlock(pos) != Blocks.Air)
                     {
-                        int vertIndex;
-
-                        //top
-                        if (GetBlock(pos + Vector3Int.up) == Blocks.Air)
+                        foreach (var face in faces)
                         {
-                            vertIndex = vertices.Count;
-                            vertices.Add(vertexPos[0] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            vertices.Add(vertexPos[1] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            vertices.Add(vertexPos[2] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            vertices.Add(vertexPos[3] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-
-                            triangles.AddRange(new List<int> {
-                                vertIndex + 0, vertIndex + 1, vertIndex + 2,
-                                vertIndex + 2, vertIndex + 3, vertIndex + 0
-                            });
-                        }
-
-                        //bottom
-                        if (GetBlock(pos + Vector3Int.down) == Blocks.Air)
-                        {
-                            vertIndex = vertices.Count;
-
-                            vertices.Add(vertexPos[5] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            vertices.Add(vertexPos[4] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            vertices.Add(vertexPos[7] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            vertices.Add(vertexPos[6] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-
-                            triangles.AddRange(new List<int> {
-                                vertIndex + 0, vertIndex + 1, vertIndex + 2,
-                                vertIndex + 2, vertIndex + 3, vertIndex +0
-                            });
-                        }
-
-                        //front
-                        if (GetBlock(pos + Vector3Int.forward) == Blocks.Air)
-                        {
-                            vertIndex = vertices.Count;
-                            vertices.Add(vertexPos[1] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            vertices.Add(vertexPos[5] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            vertices.Add(vertexPos[6] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            vertices.Add(vertexPos[2] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            triangles.AddRange(new List<int> {
-                                vertIndex + 0, vertIndex + 1, vertIndex + 2,
-                                vertIndex + 2, vertIndex + 3, vertIndex +0
-                            });
-                        }
-
-                        //back
-                        if (GetBlock(pos + Vector3Int.back) == Blocks.Air)
-                        {
-                            vertIndex = vertices.Count;
-                            vertices.Add(vertexPos[3] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            vertices.Add(vertexPos[7] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            vertices.Add(vertexPos[4] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            vertices.Add(vertexPos[0] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            triangles.AddRange(new List<int> {
-                                vertIndex + 0, vertIndex + 1, vertIndex + 2,
-                                vertIndex + 2, vertIndex + 3, vertIndex +0
-                            });
-                        }
-
-                        //right
-                        if (GetBlock(pos + Vector3Int.right) == Blocks.Air)
-                        {
-                            vertIndex = vertices.Count;
-                            vertices.Add(vertexPos[2] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            vertices.Add(vertexPos[6] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            vertices.Add(vertexPos[7] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            vertices.Add(vertexPos[3] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            triangles.AddRange(new List<int> {
-                                vertIndex + 0, vertIndex + 1, vertIndex + 2,
-                                vertIndex + 2, vertIndex + 3, vertIndex +0
-                            });
-                        }
-
-                        //left
-                        if (GetBlock(pos + Vector3Int.left) == Blocks.Air)
-                        {
-                            vertIndex = vertices.Count;
-                            vertices.Add(vertexPos[0] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            vertices.Add(vertexPos[4] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            vertices.Add(vertexPos[5] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            vertices.Add(vertexPos[1] + new Vector3(x - 0.5f, y - 0.5f, z - 0.5f));
-                            triangles.AddRange(new List<int> {
-                                vertIndex + 0, vertIndex + 1, vertIndex + 2,
-                                vertIndex + 2, vertIndex + 3, vertIndex +0
-                            });
+                            if (GetBlock(pos + Vector3Int.RoundToInt(face.direction)) == Blocks.Air)
+                                AddFace(pos, face);
                         }
                     }
                 }
             }
         }
 
-        meshFilter.mesh = new Mesh()
+        Mesh mesh = new Mesh()
         {
             vertices = vertices.ToArray(),
-            triangles = triangles.ToArray()
+            triangles = triangles.ToArray(),
+            uv = uvs.ToArray()
         };
-        meshFilter.mesh.RecalculateBounds();
-        meshFilter.mesh.RecalculateNormals();
+
+        mesh.RecalculateBounds();
+        mesh.RecalculateNormals();
+
+        meshFilter.mesh = mesh;
     }
 
+    void AddFace(Vector3Int pos, Face face)
+    {
+        int vertIndex = vertices.Count;
+        foreach (var i in face.vertexIndices)
+            vertices.Add(vertexPos[i] + pos - new Vector3(0.5f, 0.5f, 0.5f));
 
+        triangles.AddRange(new int[] { vertIndex, vertIndex + 1, vertIndex + 2, vertIndex + 2, vertIndex + 3, vertIndex });
+
+        // proste UV
+        uvs.Add(new Vector2(0, 0));
+        uvs.Add(new Vector2(0, 1));
+        uvs.Add(new Vector2(1, 1));
+        uvs.Add(new Vector2(1, 0));
+    }
+
+    Blocks GetBlock(Vector3Int coordinates)
+    {
+        float height = Mathf.Floor(Mathf.PerlinNoise(coordinates.x * 0.1f, coordinates.z * 0.1f) * 5f);
+
+        if (coordinates.y > height)
+            return Blocks.Air;
+
+        float typeNoise = Mathf.PerlinNoise(coordinates.x * 0.3f, coordinates.z * 0.3f);
+
+        if (typeNoise > 0.6f)
+            return Blocks.Stone;
+        else
+            return Blocks.Dirt;
+    }
     private void OnDrawGizmos()
     {
         if (showGizmos)
@@ -192,30 +153,5 @@ public class WorldGenerator : MonoBehaviour
                 }
             }
         }
-    }
-    Blocks GetBlock(Vector3Int coordinates)
-    {
-        float height = Mathf.Floor(Mathf.PerlinNoise(coordinates.x * 0.1f, coordinates.z * 0.1f) * 5f);
-
-        if (coordinates.y > height)
-            return Blocks.Air;
-
-        float typeNoise = Mathf.PerlinNoise(coordinates.x * 0.3f, coordinates.z * 0.3f);
-
-        if (typeNoise > 0.6f)
-            return Blocks.Stone;
-        else
-            return Blocks.Dirt;
-    }
-}
-struct Face
-{
-    public int[] vertexIndices;
-    public Vector3 direction;
-
-    public Face(int[] vertexIndices, Vector3 dir)
-    {
-        this.vertexIndices = vertexIndices;
-        this.direction = dir;
     }
 }
