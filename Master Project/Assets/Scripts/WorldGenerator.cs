@@ -114,7 +114,7 @@ public class WorldGenerator : MonoBehaviour
 
     Blocks GetBlock(Vector3Int coordinates)
     {
-        float height = Mathf.Floor(Mathf.PerlinNoise(coordinates.x * 0.1f, coordinates.z * 0.1f) * 5f);
+        float height = Mathf.Floor(Mathf.PerlinNoise((coordinates.x + offset.x) * 0.1f, (coordinates.z + offset.z) * 0.1f) * 5f);
 
         if (coordinates.y > height)
         {
