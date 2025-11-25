@@ -34,6 +34,7 @@ public class Chunk : MonoBehaviour
 
     List<Vector3> vertices = new List<Vector3>();
     List<int> triangles = new List<int>();
+    List<Vector3> uvs = new List<Vector3>();
     struct Face
     {
         public int[] vertexIndices;
@@ -67,6 +68,7 @@ public class Chunk : MonoBehaviour
     {
         vertices.Clear();
         triangles.Clear();
+        uvs.Clear();
 
         if (meshFilter.sharedMesh != null)
         {
@@ -86,7 +88,7 @@ public class Chunk : MonoBehaviour
                         foreach (var face in faces)
                         {
                             if (GetBlock(pos + Vector3Int.RoundToInt(face.direction)) == BlockType.Air)
-                                AddFace(pos, face);
+                                AddFace(pos, face, GetBlock(pos));
                         }
                     }
                 }
@@ -97,10 +99,36 @@ public class Chunk : MonoBehaviour
         mesh.vertices = vertices.ToArray();
         mesh.triangles = triangles.ToArray();
 
+        mesh.SetUVs(0, uvs);
+
         mesh.RecalculateBounds();
         mesh.RecalculateNormals();
 
         meshFilter.mesh = mesh;
+    }
+    void AddTextureUVs(BlockType blockType, Vector3 faceDir)
+    {
+        float textureIndex = 0;
+
+        switch (blockType)
+        {
+            case BlockType.Grass:
+                if (faceDir == Vector3.up) textureIndex = 0; // Trawa góra (Index 0)
+                else if (faceDir == Vector3.down) textureIndex = 2; // Ziemia (Index 2)
+                else textureIndex = 1; // Trawa bok (Index 1)
+                break;
+            case BlockType.Dirt:
+                textureIndex = 2; // Ziemia (Index 2)
+                break;
+            case BlockType.Stone:
+                textureIndex = 3; // Kamieñ (Index 3)
+                break;
+        }
+
+        uvs.Add(new Vector3(0, 1, textureIndex)); // 0: Lewy-Górny róg tekstury
+        uvs.Add(new Vector3(0, 0, textureIndex)); // 1: Lewy-Dolny róg tekstury
+        uvs.Add(new Vector3(1, 0, textureIndex)); // 2: Prawy-Dolny róg tekstury
+        uvs.Add(new Vector3(1, 1, textureIndex)); //
     }
 
     private BlockType GetBlock(Vector3Int pos)
@@ -121,74 +149,52 @@ public class Chunk : MonoBehaviour
         float globalY = pos.y + transform.position.y;
         float globalZ = pos.z + transform.position.z;
 
-        // --- KONFIGURACJA (Mo¿esz to wynieœæ do zmiennych publicznych) ---
-        float caveThreshold = 0.5f;      // Jak du¿e s¹ jaskinie (im mniej, tym wiêcej dziur)
-        float islandThreshold = 0.65f;   // Jak gêste s¹ wyspy (im wiêcej, tym mniejsze wyspy)
-        int islandMinHeight = 20;        // Od jakiej wysokoœci zaczynaj¹ siê wyspy
+        float caveThreshold = 0.5f;
+        float islandThreshold = 0.65f;
+        int islandMinHeight = 20;
 
-        // 1. BEDROCK (Zawsze na dnie, niezniszczalny)
-        if (globalY <= -64)
-        {
-            return BlockType.Bedrock;
-        }
+        //if (globalY <= -64)
+        //{
+        //    return BlockType.Bedrock;
+        //}
 
-        // 2. TEREN PODSTAWOWY (Heightmap 2D)
-        // To twoja stara logika - tworzy pod³ogê
-        float terrainHeight = Mathf.PerlinNoise(globalX * 0.05f, globalZ * 0.05f) * 15f; // Zwiêkszy³em amplitudê do 15
+        float terrainHeight = Mathf.PerlinNoise(globalX * 0.05f, globalZ * 0.05f) * 15f;
         int groundHeight = Mathf.FloorToInt(terrainHeight);
 
         BlockType blockType = BlockType.Air;
 
-        // Sprawdzamy, czy jesteœmy w "gruncie"
         if (globalY <= groundHeight)
         {
-            // Standardowe warstwy
             if (globalY == groundHeight) blockType = BlockType.Grass;
             else if (globalY > groundHeight - 4) blockType = BlockType.Dirt;
             else blockType = BlockType.Stone;
         }
 
-        // 3. LATAJ¥CE WYSPY (Szum 3D - Dodawanie)
-        // Sprawdzamy tylko wysoko nad ziemi¹, ¿eby oszczêdziæ obliczenia
         if (globalY > islandMinHeight)
         {
-            // U¿ywamy innej skali (0.03f) ¿eby wyspy by³y wiêksze i bardziej "chmurzaste"
-            // Odejmujemy trochê od Y w szumie, ¿eby wyspy by³y rzadsze im wy¿ej
             float islandNoise = Perlin3D(globalX * 0.03f, globalY * 0.05f, globalZ * 0.03f);
 
             if (islandNoise > islandThreshold)
             {
-                // Jeœli trafiliœmy na wyspê, nadpisujemy powietrze
-                // Prosta logika: Wierzch wyspy to trawa/ziemia, œrodek to kamieñ
-
-                // Sprytny trik: jeœli szum jest blisko granicy (0.65 - 0.70), to znaczy ¿e jesteœmy na krawêdzi wyspy -> Ziemia/Trawa
-                // Jeœli szum jest mocny (> 0.70), to znaczy ¿e jesteœmy g³êboko w wyspie -> Kamieñ
 
                 if (islandNoise < islandThreshold + 0.05f)
                     blockType = BlockType.Dirt; // Lub Grass, jeœli chcesz zielone ca³e wyspy
                 else
                     blockType = BlockType.Stone;
 
-                // Opcjonalnie: Jeœli blok nad nami jest pusty (Air), zamieñ ten blok na Grass.
-                // (Wymaga³oby to sprawdzenia s¹siada, tutaj upraszczamy)
                 if (blockType == BlockType.Dirt) blockType = BlockType.Grass;
             }
         }
 
-        // Jeœli po krokach 2 i 3 nadal mamy Air, to koñczymy (szkoda liczyæ jaskinie w powietrzu)
         if (blockType == BlockType.Air) return BlockType.Air;
 
-        // 4. JASKINIE (Szum 3D - Odejmowanie)
-        // Wycinamy dziury w Kamieniu, Ziemi i Wyspach (ale nie w Bedrocku!)
         if (blockType != BlockType.Bedrock)
         {
-            // Skala 0.05f daje fajne, krête korytarze.
-            // Dodajemy offset do Y, ¿eby jaskinie nie pokrywa³y siê idealnie z kszta³tem terenu
             float caveNoise = Perlin3D(globalX * 0.05f, (globalY + 100) * 0.05f, globalZ * 0.05f);
 
             if (caveNoise > caveThreshold)
             {
-                return BlockType.Air; // Jaskinia "zjada" blok
+                return BlockType.Air;
             }
         }
 
@@ -210,19 +216,17 @@ public class Chunk : MonoBehaviour
     }
 
 
-    void AddFace(Vector3Int pos, Face face)
+    void AddFace(Vector3Int pos, Face face, BlockType blockType)
     {
         int vertIndex = vertices.Count;
 
-        // Dodajemy wierzcho³ki
         foreach (var i in face.vertexIndices)
         {
             vertices.Add(vertexPos[i] + pos);
         }
 
-        // Dodajemy trójk¹ty
         triangles.AddRange(new int[] { vertIndex, vertIndex + 1, vertIndex + 2, vertIndex + 2, vertIndex + 3, vertIndex });
-
+        AddTextureUVs(blockType, face.direction);
     }
 
     [Header("Debug Settings")]
@@ -232,14 +236,12 @@ public class Chunk : MonoBehaviour
     {
         if (!showGizmos) return;
 
-        // Rysuj ¿ó³t¹ ramkê ca³ego chunka
         Gizmos.color = Color.yellow;
         Vector3 chunkCenter = transform.position + new Vector3(dimensions.x / 2f, dimensions.y / 2f, dimensions.z / 2f);
         Gizmos.DrawWireCube(chunkCenter, dimensions);
 
         if (blocks == null) return;
 
-        // Tablica kierunków do sprawdzania s¹siadów
         Vector3Int[] directions = new Vector3Int[]
         {
             Vector3Int.up, Vector3Int.down,
