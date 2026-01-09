@@ -1,5 +1,5 @@
+using System.Collections;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using UnityEngine;
 
 public enum BlockType
@@ -20,12 +20,12 @@ public class World : MonoBehaviour
     List<Chunk> chunks = new List<Chunk>();
     public GameObject chunkPrefab;
 
-    private async void Awake()
+    private void Awake()
     {
-        await GenerateWorld();
+        StartCoroutine(GenerateWorld());
     }
 
-    private async Task GenerateWorld()
+    private IEnumerator GenerateWorld()
     {
         for (int x = -startSize.x / 2; x <= startSize.x / 2; x++)
         {
@@ -37,7 +37,7 @@ public class World : MonoBehaviour
                     newChunk.Initialize(chunkDimensions);
                     chunks.Add(newChunk);
                 }
-                await Task.Delay(1);
+                yield return new WaitForEndOfFrame();
 
             }
         }

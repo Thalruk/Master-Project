@@ -48,7 +48,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   dimensions: {x: 16, y: 16, z: 16}
   meshFilter: {fileID: 9132501500771194516}
-  showGizmos: 0
+  showGizmos: 1
 --- !u!33 &9132501500771194516
 MeshFilter:
   m_ObjectHideFlags: 0
