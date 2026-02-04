@@ -3,92 +3,109 @@ using UnityEngine;
 
 public class Chunk : MonoBehaviour
 {
-    public BlockType[,,] blocks;
-    public Vector3Int dimensions;
+    // Publiczny dostêp do danych (read-only dla bezpieczeñstwa)
+    public int[] VoxelData { get; private set; }
+
+    public Vector3Int GridCoord { get; private set; } // Moja pozycja w siatce (np. 0,1,0)
+
+    private int size;
+    private World worldRef;
+    private ComputeShader voxelShader; // Przypisz w prefabie!
+
     [SerializeField] MeshFilter meshFilter;
+    [SerializeField] MeshRenderer meshRenderer;
 
-    readonly Vector3[] vertexPos = new Vector3[8]
-     {
-            //TOP
-            new Vector3(-0.5f,  0.5f, -0.5f), // 0: Back-Left-Up
-            new Vector3(-0.5f,  0.5f,  0.5f), // 1: Front-Left-Up
-            new Vector3( 0.5f,  0.5f,  0.5f), // 2: Front-Right-Up
-            new Vector3( 0.5f,  0.5f, -0.5f), // 3: Back-Right-Up
+    // Potrzebujemy referencji do shadera w kodzie. 
+    // Najlepiej wczytaæ go z Resources albo przypisaæ w Inspectorze prefaba.
+    // Tutaj zak³adam, ¿e przypiszesz go w Inspectorze w Unity.
+    [SerializeField] ComputeShader assignedShader;
 
-            //BOTTOM 
-            new Vector3(-0.5f, -0.5f, -0.5f), // 4: Back-Left-Down
-            new Vector3(-0.5f, -0.5f,  0.5f), // 5: Front-Left-Down
-            new Vector3( 0.5f, -0.5f,  0.5f), // 6: Front-Right-Down
-            new Vector3( 0.5f, -0.5f, -0.5f), // 7: Back-Right-Down
-     };
-
-    readonly Face[] faces = new Face[]
+    // --- STRUKTURY DLA MESHA ---
+    struct FaceData
     {
-            new Face(new int[]{0,1,2,3}, Vector3.up),    // top
-            new Face(new int[]{5,4,7,6}, Vector3.down),  // bottom
-            new Face(new int[]{1,5,6,2}, Vector3.forward), // front
-            new Face(new int[]{3,7,4,0}, Vector3.back),    // back
-            new Face(new int[]{2,6,7,3}, Vector3.right),   // right
-            new Face(new int[]{0,4,5,1}, Vector3.left)     // left
+        public int[] vertIndices;
+        public Vector3Int direction;
+        public FaceData(int[] i, Vector3Int d) { vertIndices = i; direction = d; }
+    }
+
+    readonly Vector3[] vertexPos = new Vector3[8] {
+        new Vector3(-0.5f, 0.5f,-0.5f), new Vector3(-0.5f, 0.5f, 0.5f), new Vector3( 0.5f, 0.5f, 0.5f), new Vector3( 0.5f, 0.5f,-0.5f),
+        new Vector3(-0.5f,-0.5f,-0.5f), new Vector3(-0.5f,-0.5f, 0.5f), new Vector3( 0.5f,-0.5f, 0.5f), new Vector3( 0.5f,-0.5f,-0.5f)
+    };
+
+    readonly FaceData[] faces = new FaceData[] {
+        new FaceData(new int[]{0,1,2,3}, Vector3Int.up),
+        new FaceData(new int[]{5,4,7,6}, Vector3Int.down),
+        new FaceData(new int[]{1,5,6,2}, new Vector3Int(0,0,1)), // Front
+        new FaceData(new int[]{3,7,4,0}, new Vector3Int(0,0,-1)),// Back
+        new FaceData(new int[]{2,6,7,3}, Vector3Int.right),
+        new FaceData(new int[]{0,4,5,1}, Vector3Int.left)
     };
 
     List<Vector3> vertices = new List<Vector3>();
     List<int> triangles = new List<int>();
     List<Vector3> uvs = new List<Vector3>();
-    struct Face
-    {
-        public int[] vertexIndices;
-        public Vector3 direction;
 
-        public Face(int[] vertexIndices, Vector3 dir)
+    // --- KROK 1: Generowanie Danych ---
+    public void InitializeData(Vector3Int coord, int chunkSize, World world)
+    {
+        this.GridCoord = coord;
+        this.size = chunkSize;
+        this.worldRef = world;
+        this.voxelShader = assignedShader;
+
+        int totalVoxels = size * size * size;
+        VoxelData = new int[totalVoxels];
+
+        // Obliczenia na GPU
+        ComputeBuffer buffer = new ComputeBuffer(totalVoxels, 4);
+        try
         {
-            this.vertexIndices = vertexIndices;
-            this.direction = dir;
+            buffer.SetData(VoxelData);
+            int kernel = voxelShader.FindKernel("CSMain");
+            voxelShader.SetBuffer(kernel, "ResultBuffer", buffer);
+            voxelShader.SetInt("ChunkSize", size);
+
+            // Wa¿ne: Przekazujemy globaln¹ pozycjê, ¿eby noise siê zgadza³
+            voxelShader.SetVector("ChunkOffset", transform.position);
+
+            voxelShader.Dispatch(kernel, size / 8, size / 8, size / 8);
+            buffer.GetData(VoxelData);
+        }
+        finally
+        {
+            buffer.Dispose();
         }
     }
 
-    public void Initialize(Vector3Int chunkSize)
+    // --- KROK 2: Generowanie Mesha ---
+    public void UpdateMesh()
     {
-        this.dimensions = chunkSize;
-        blocks = new BlockType[dimensions.x, dimensions.y, dimensions.z];
-        for (int x = 0; x < dimensions.x; x++)
+        vertices.Clear(); triangles.Clear(); uvs.Clear();
+        if (meshFilter.sharedMesh != null) meshFilter.sharedMesh.Clear();
+
+        for (int x = 0; x < size; x++)
         {
-            for (int y = 0; y < dimensions.y; y++)
+            for (int y = 0; y < size; y++)
             {
-                for (int z = 0; z < dimensions.z; z++)
+                for (int z = 0; z < size; z++)
                 {
-                    blocks[x, y, z] = GetBlockData(new Vector3Int(x, y, z));
-                }
-            }
-        }
-        GenerateMesh();
-    }
 
-    private void GenerateMesh()
-    {
-        vertices.Clear();
-        triangles.Clear();
-        uvs.Clear();
+                    // Jeœli ja jestem pusty, nie generujê nic
+                    if (!IsSolid(x, y, z)) continue;
 
-        if (meshFilter.sharedMesh != null)
-        {
-            meshFilter.sharedMesh.Clear();
-        }
-
-
-        for (int x = 0; x < dimensions.x; x++)
-        {
-            for (int y = 0; y < dimensions.y; y++)
-            {
-                for (int z = 0; z < dimensions.z; z++)
-                {
                     Vector3Int pos = new Vector3Int(x, y, z);
-                    if (GetBlock(pos) != BlockType.Air)
+                    int myBlockID = GetBlockLocal(x, y, z);
+
+                    foreach (var face in faces)
                     {
-                        foreach (var face in faces)
+                        // Sprawdzamy s¹siada w kierunku œcianki
+                        Vector3Int neighborPos = pos + face.direction;
+
+                        // Jeœli s¹siad NIE jest lity (jest powietrzem), to rysujemy œciankê
+                        if (!IsSolid(neighborPos.x, neighborPos.y, neighborPos.z))
                         {
-                            if (GetBlock(pos + Vector3Int.RoundToInt(face.direction)) == BlockType.Air)
-                                AddFace(pos, face, GetBlock(pos));
+                            AddFace(pos, face, (BlockType)myBlockID);
                         }
                     }
                 }
@@ -96,207 +113,79 @@ public class Chunk : MonoBehaviour
         }
 
         Mesh mesh = new Mesh();
+        mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32; // Obs³uga du¿ych meshy
         mesh.vertices = vertices.ToArray();
         mesh.triangles = triangles.ToArray();
-
         mesh.SetUVs(0, uvs);
-
         mesh.RecalculateBounds();
         mesh.RecalculateNormals();
 
         meshFilter.mesh = mesh;
     }
-    void AddTextureUVs(BlockType blockType, Vector3 faceDir)
+
+    // --- KLUCZOWA LOGIKA ---
+
+    // Pobiera blok z lokalnej tablicy (bez sprawdzania granic, bo wiemy ¿e x,y,z s¹ ok)
+    int GetBlockLocal(int x, int y, int z)
     {
-        float textureIndex = 0;
-
-        switch (blockType)
-        {
-            case BlockType.Grass:
-                if (faceDir == Vector3.up) textureIndex = 0; // Trawa góra (Index 0)
-                else if (faceDir == Vector3.down) textureIndex = 2; // Ziemia (Index 2)
-                else textureIndex = 1; // Trawa bok (Index 1)
-                break;
-            case BlockType.Dirt:
-                textureIndex = 2; // Ziemia (Index 2)
-                break;
-            case BlockType.Stone:
-                textureIndex = 3; // Kamieñ (Index 3)
-                break;
-        }
-
-        uvs.Add(new Vector3(0, 1, textureIndex)); // 0: Lewy-Górny róg tekstury
-        uvs.Add(new Vector3(0, 0, textureIndex)); // 1: Lewy-Dolny róg tekstury
-        uvs.Add(new Vector3(1, 0, textureIndex)); // 2: Prawy-Dolny róg tekstury
-        uvs.Add(new Vector3(1, 1, textureIndex)); //
+        return VoxelData[x + (y * size) + (z * size * size)];
     }
 
-    private BlockType GetBlock(Vector3Int pos)
+    // Sprawdza czy blok jest lity (obs³uguje s¹siadów!)
+    bool IsSolid(int x, int y, int z)
     {
-        if (pos.x >= 0 && pos.x < dimensions.x &&
-            pos.y >= 0 && pos.y < dimensions.y &&
-            pos.z >= 0 && pos.z < dimensions.z)
+        // 1. Jeœli jesteœmy WEWN¥TRZ tego chunka
+        if (x >= 0 && x < size && y >= 0 && y < size && z >= 0 && z < size)
         {
-            return blocks[pos.x, pos.y, pos.z];
+            return GetBlockLocal(x, y, z) != 0;
         }
 
-        return GetBlockData(pos);
+        // 2. Jeœli jesteœmy POZA chunkiem -> musimy zapytaæ World o s¹siada
+
+        // Obliczamy w któr¹ stronê wyszliœmy (np. x=-1 oznacza direction (-1,0,0))
+        Vector3Int neighborDir = new Vector3Int(0, 0, 0);
+        if (x < 0) neighborDir.x = -1;
+        else if (x >= size) neighborDir.x = 1;
+
+        if (y < 0) neighborDir.y = -1;
+        else if (y >= size) neighborDir.y = 1;
+
+        if (z < 0) neighborDir.z = -1;
+        else if (z >= size) neighborDir.z = 1;
+
+        // Pytamy World o chunka pod wspó³rzêdnymi [Ja + Kierunek]
+        Chunk neighborChunk = worldRef.GetChunk(GridCoord + neighborDir);
+
+        if (neighborChunk != null)
+        {
+            // Mamy s¹siada! Ale musimy przeliczyæ wspó³rzêdne na JEGO lokalne.
+            // Np. jeœli ja szukam x=-1, to u s¹siada po lewej to jest x=15.
+            // U¿ywamy modulo (z poprawk¹ na ujemne liczby w C#)
+            int nx = (x + size) % size;
+            int ny = (y + size) % size;
+            int nz = (z + size) % size;
+
+            // Pobieramy dane z tablicy s¹siada
+            // UWAGA: Musisz zrobiæ VoxelData public w Chunk.cs
+            int neighborBlock = neighborChunk.VoxelData[nx + (ny * size) + (nz * size * size)];
+            return neighborBlock != 0;
+        }
+
+        // 3. Jeœli s¹siad NIE ISTNIEJE (Koniec œwiata)
+        // Zwracamy false (powietrze), ¿eby zamkn¹æ œwiat œciankami zewnêtrznymi
+        return false;
     }
 
-    private BlockType GetBlockData(Vector3Int pos)
+    void AddFace(Vector3Int pos, FaceData face, BlockType type)
     {
-        float globalX = pos.x + transform.position.x;
-        float globalY = pos.y + transform.position.y;
-        float globalZ = pos.z + transform.position.z;
+        int v = vertices.Count;
+        foreach (int i in face.vertIndices) vertices.Add(vertexPos[i] + pos);
+        triangles.AddRange(new int[] { v, v + 1, v + 2, v + 2, v + 3, v });
 
-        float caveThreshold = 0.5f;
-        float islandThreshold = 0.65f;
-        int islandMinHeight = 20;
-
-        //if (globalY <= -64)
-        //{
-        //    return BlockType.Bedrock;
-        //}
-
-        float terrainHeight = Mathf.PerlinNoise(globalX * 0.05f, globalZ * 0.05f) * 15f;
-        int groundHeight = Mathf.FloorToInt(terrainHeight);
-
-        BlockType blockType = BlockType.Air;
-
-        if (globalY <= groundHeight)
-        {
-            if (globalY == groundHeight) blockType = BlockType.Grass;
-            else if (globalY > groundHeight - 4) blockType = BlockType.Dirt;
-            else blockType = BlockType.Stone;
-        }
-
-        if (globalY > islandMinHeight)
-        {
-            float islandNoise = Perlin3D(globalX * 0.03f, globalY * 0.05f, globalZ * 0.03f);
-
-            if (islandNoise > islandThreshold)
-            {
-
-                if (islandNoise < islandThreshold + 0.05f)
-                    blockType = BlockType.Dirt; // Lub Grass, jeœli chcesz zielone ca³e wyspy
-                else
-                    blockType = BlockType.Stone;
-
-                if (blockType == BlockType.Dirt) blockType = BlockType.Grass;
-            }
-        }
-
-        if (blockType == BlockType.Air) return BlockType.Air;
-
-        if (blockType != BlockType.Bedrock)
-        {
-            float caveNoise = Perlin3D(globalX * 0.05f, (globalY + 100) * 0.05f, globalZ * 0.05f);
-
-            if (caveNoise > caveThreshold)
-            {
-                return BlockType.Air;
-            }
-        }
-
-        return blockType;
-    }
-
-    public static float Perlin3D(float x, float y, float z)
-    {
-        float ab = Mathf.PerlinNoise(x, y);
-        float bc = Mathf.PerlinNoise(y, z);
-        float ac = Mathf.PerlinNoise(x, z);
-
-        float ba = Mathf.PerlinNoise(y, x);
-        float cb = Mathf.PerlinNoise(z, y);
-        float ca = Mathf.PerlinNoise(z, x);
-
-        float abc = ab + bc + ac + ba + cb + ca;
-        return abc / 6f;
-    }
-
-
-    void AddFace(Vector3Int pos, Face face, BlockType blockType)
-    {
-        int vertIndex = vertices.Count;
-
-        foreach (var i in face.vertexIndices)
-        {
-            vertices.Add(vertexPos[i] + pos);
-        }
-
-        triangles.AddRange(new int[] { vertIndex, vertIndex + 1, vertIndex + 2, vertIndex + 2, vertIndex + 3, vertIndex });
-        AddTextureUVs(blockType, face.direction);
-    }
-
-    [Header("Debug Settings")]
-    [SerializeField] bool showGizmos = false;
-
-    private void OnDrawGizmos()
-    {
-        if (!showGizmos) return;
-
-        Gizmos.color = Color.yellow;
-        Vector3 chunkCenter = transform.position + new Vector3(dimensions.x / 2f, dimensions.y / 2f, dimensions.z / 2f);
-        Gizmos.DrawWireCube(chunkCenter, dimensions);
-
-        if (blocks == null) return;
-
-        Vector3Int[] directions = new Vector3Int[]
-        {
-            Vector3Int.up, Vector3Int.down,
-            Vector3Int.left, Vector3Int.right,
-            Vector3Int.forward, Vector3Int.back
-        };
-
-        for (int x = 0; x < dimensions.x; x++)
-        {
-            for (int y = 0; y < dimensions.y; y++)
-            {
-                for (int z = 0; z < dimensions.z; z++)
-                {
-                    BlockType currentType = blocks[x, y, z];
-
-                    if (currentType == BlockType.Air) continue;
-
-                    bool isFullySurrounded = true;
-
-                    foreach (var dir in directions)
-                    {
-                        Vector3Int neighborPos = new Vector3Int(x, y, z) + dir;
-
-                        if (neighborPos.x >= 0 && neighborPos.x < dimensions.x &&
-                            neighborPos.y >= 0 && neighborPos.y < dimensions.y &&
-                            neighborPos.z >= 0 && neighborPos.z < dimensions.z)
-                        {
-                            if (blocks[neighborPos.x, neighborPos.y, neighborPos.z] != currentType)
-                            {
-                                isFullySurrounded = false;
-                                break;
-                            }
-                        }
-                        else
-                        {
-                            isFullySurrounded = false;
-                            break;
-                        }
-                    }
-
-                    if (isFullySurrounded) continue;
-
-                    Gizmos.color = currentType switch
-                    {
-                        BlockType.Grass => Color.green,
-                        BlockType.Dirt => new Color(0.59f, 0.29f, 0.0f),
-                        BlockType.Stone => Color.gray,
-                        BlockType.Bedrock => Color.black,
-                        _ => Color.white
-                    };
-
-                    Vector3 blockCenterGlobal = transform.position + new Vector3(x + 0.5f, y + 0.5f, z + 0.5f);
-                    Gizmos.DrawWireCube(blockCenterGlobal, Vector3.one);
-                }
-            }
-        }
+        // Twoja funkcja UV (skrócona dla czytelnoœci)
+        float idx = (type == BlockType.Grass) ? (face.direction.y > 0 ? 0 : (face.direction.y < 0 ? 2 : 1)) :
+                    (type == BlockType.Dirt ? 2 : 3);
+        uvs.Add(new Vector3(0, 1, idx)); uvs.Add(new Vector3(0, 0, idx));
+        uvs.Add(new Vector3(1, 0, idx)); uvs.Add(new Vector3(1, 1, idx));
     }
 }

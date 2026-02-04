@@ -152,8 +152,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a51a2ed0b6fb34e4da95933f24241817, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  startSize: {x: 10, y: 10, z: 10}
-  chunkDimensions: {x: 16, y: 16, z: 16}
+  startSize: {x: 25, y: 25, z: 25}
+  chunkSize: 16
   chunkPrefab: {fileID: 5475054195370043391, guid: a9c3c85679097604b8fc0531cde57470, type: 3}
 --- !u!4 &105452421
 Transform:
