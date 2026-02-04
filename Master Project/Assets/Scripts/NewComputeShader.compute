@@ -100,42 +100,32 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     float baseHeight = 30.0; 
 
     float noiseHeight = 0;
+    float density = 30.0 - globalPos.y; 
     float frequency = scale;
     float amplitude = maxAmplitude;
 
     for (int i = 0; i < octaves; i++)
     {
-        float n = snoise(float3(globalPos.x * frequency, 0, globalPos.z * frequency));
-        
-        noiseHeight += n * amplitude;
+        density += snoise(globalPos * frequency) * amplitude;
+    
+        if (abs(density) > 20.0)
+        {
+            break;
+        }
 
         amplitude *= persistence;
         frequency *= lacunarity;
     }
 
-    float finalTerrainHeight = baseHeight + noiseHeight;
-
-    int blockType = 0; 
-
-    if (globalPos.y < finalTerrainHeight)
+    int blockType = 0;
+    if (density > 0) 
     {
-        if (globalPos.y < finalTerrainHeight - 5)
-        {
-            blockType = 3; 
-        }
-        else if (globalPos.y < finalTerrainHeight - 1)
-        {
+        if (density > 10)
+            blockType = 3;
+        else if (density > 2)
             blockType = 2; 
-        }
         else
-        {
             blockType = 1; 
-        }
-    }
-
-    if (globalPos.y <= 1)
-    {
-        blockType = 4; 
     }
 
     int index = id.x + (id.y * ChunkSize) + (id.z * ChunkSize * ChunkSize);

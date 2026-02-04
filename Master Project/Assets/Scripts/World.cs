@@ -60,12 +60,16 @@ public class World : MonoBehaviour
             //yield return null;
         }
         dataTimer.Stop();
+
+        yield return new WaitUntil(() => chunksReady >= chunkMap.Count);
+
         meshTimer.Start();
+
         foreach (var chunk in chunkMap.Values)
         {
             chunk.UpdateMesh();
-            //yield return null;
         }
+
         meshTimer.Stop();
 
         long totalVoxelDataMemory = 0;
@@ -99,4 +103,7 @@ public class World : MonoBehaviour
 
         yield break;
     }
+
+    private int chunksReady = 0;
+    public void OnDataReady() => chunksReady++;
 }

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 public class Chunk : MonoBehaviour
 {
@@ -52,28 +53,42 @@ public class Chunk : MonoBehaviour
         VoxelData = new byte[totalVoxels];
 
         ComputeBuffer buffer = new ComputeBuffer(totalVoxels / 4, 4);
-        try
-        {
-            buffer.SetData(VoxelData);
-            int kernel = voxelShader.FindKernel("CSMain");
-            voxelShader.SetBuffer(kernel, "ResultBuffer", buffer);
-            voxelShader.SetInt("ChunkSize", size);
 
-            voxelShader.SetVector("ChunkOffset", transform.position);
+        buffer.SetData(new uint[totalVoxels / 4]);
+        int kernel = voxelShader.FindKernel("CSMain");
+        voxelShader.SetBuffer(kernel, "ResultBuffer", buffer);
+        voxelShader.SetInt("ChunkSize", size);
+        voxelShader.SetVector("ChunkOffset", transform.position);
 
-            voxelShader.Dispatch(kernel, size / 8, size / 8, size / 8);
-            buffer.GetData(VoxelData);
-        }
-        finally
+        voxelShader.Dispatch(kernel, size / 8, size / 8, size / 8);
+
+        AsyncGPUReadback.Request(buffer, (AsyncGPUReadbackRequest request) =>
         {
+            if (request.hasError) return;
+
+            var data = request.GetData<byte>();
+
+            if (data.Length == VoxelData.Length)
+            {
+                data.CopyTo(VoxelData);
+            }
+
             buffer.Dispose();
-        }
-    }
 
+            worldRef.OnDataReady();
+        });
+    }
     public void UpdateMesh()
     {
         vertices.Clear(); triangles.Clear(); uvs.Clear();
         if (meshFilter.sharedMesh != null) meshFilter.sharedMesh.Clear();
+
+        Chunk nUp = worldRef.GetChunk(GridCoord + Vector3Int.up);
+        Chunk nDown = worldRef.GetChunk(GridCoord + Vector3Int.down);
+        Chunk nRight = worldRef.GetChunk(GridCoord + Vector3Int.right);
+        Chunk nLeft = worldRef.GetChunk(GridCoord + Vector3Int.left);
+        Chunk nFront = worldRef.GetChunk(GridCoord + new Vector3Int(0, 0, 1));
+        Chunk nBack = worldRef.GetChunk(GridCoord + new Vector3Int(0, 0, -1));
 
         for (int x = 0; x < size; x++)
         {
@@ -81,8 +96,8 @@ public class Chunk : MonoBehaviour
             {
                 for (int z = 0; z < size; z++)
                 {
+                    if (!IsSolidFast(x, y, z, nUp, nDown, nRight, nLeft, nFront, nBack)) continue;
 
-                    if (!IsSolid(x, y, z)) continue;
 
                     Vector3Int pos = new Vector3Int(x, y, z);
                     int myBlockID = GetBlockLocal(x, y, z);
@@ -91,7 +106,7 @@ public class Chunk : MonoBehaviour
                     {
                         Vector3Int neighborPos = pos + face.direction;
 
-                        if (!IsSolid(neighborPos.x, neighborPos.y, neighborPos.z))
+                        if (!IsSolidFast(neighborPos.x, neighborPos.y, neighborPos.z, nUp, nDown, nRight, nLeft, nFront, nBack))
                         {
                             AddFace(pos, face, (BlockType)myBlockID);
                         }
@@ -99,7 +114,6 @@ public class Chunk : MonoBehaviour
                 }
             }
         }
-
         Mesh mesh = new Mesh();
         mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
         mesh.vertices = vertices.ToArray();
@@ -109,6 +123,31 @@ public class Chunk : MonoBehaviour
         mesh.RecalculateNormals();
 
         meshFilter.mesh = mesh;
+    }
+    bool IsSolidFast(int x, int y, int z, Chunk up, Chunk down, Chunk right, Chunk left, Chunk front, Chunk back)
+    {
+        if (x >= 0 && x < size && y >= 0 && y < size && z >= 0 && z < size)
+        {
+            return VoxelData[x + (y * size) + (z * size * size)] != 0;
+        }
+
+        Chunk target = null;
+        if (x < 0) target = left;
+        else if (x >= size) target = right;
+        else if (y < 0) target = down;
+        else if (y >= size) target = up;
+        else if (z < 0) target = back;
+        else if (z >= size) target = front;
+
+        if (target != null)
+        {
+            int nx = (x + size) % size;
+            int ny = (y + size) % size;
+            int nz = (z + size) % size;
+            return target.VoxelData[nx + (ny * size) + (nz * size * size)] != 0;
+        }
+
+        return false;
     }
 
     int GetBlockLocal(int x, int y, int z)
