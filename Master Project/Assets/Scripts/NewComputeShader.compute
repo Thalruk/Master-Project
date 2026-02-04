@@ -1,6 +1,6 @@
 #pragma kernel CSMain
 
-RWStructuredBuffer<int> ResultBuffer;
+RWStructuredBuffer<uint> ResultBuffer;
 float3 ChunkOffset; 
 int ChunkSize; 
 
@@ -139,5 +139,9 @@ void CSMain(uint3 id : SV_DispatchThreadID)
     }
 
     int index = id.x + (id.y * ChunkSize) + (id.z * ChunkSize * ChunkSize);
-    ResultBuffer[index] = blockType;
+    int uintIndex = index / 4;
+    int byteOffset = index % 4;
+
+    uint packedValue = (uint) blockType << (byteOffset * 8);
+    InterlockedOr(ResultBuffer[uintIndex], packedValue);
 }

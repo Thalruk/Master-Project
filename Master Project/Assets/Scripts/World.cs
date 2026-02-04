@@ -1,7 +1,9 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using UnityEngine;
-public enum BlockType
+using UnityEngine.Profiling;
+public enum BlockType : byte
 {
     Air,
     Grass,
@@ -11,12 +13,12 @@ public enum BlockType
 }
 public class World : MonoBehaviour
 {
-    [SerializeField] Vector3Int startSize = new Vector3Int(4, 2, 4); // Iloœæ chunków
-    [SerializeField] int chunkSize = 16; // Sta³y rozmiar szeœcianu dla uproszczenia
+    [SerializeField] Vector3Int startSize = new Vector3Int(4, 2, 4);
+    [SerializeField] int chunkSize = 16;
     [SerializeField] GameObject chunkPrefab;
 
-    // S£OWNIK: Pozwala znaleŸæ chunka w czasie zerowym po jego wspó³rzêdnych (np. [0,1,0])
     Dictionary<Vector3Int, Chunk> chunkMap = new Dictionary<Vector3Int, Chunk>();
+
 
     private void Start()
     {
@@ -34,9 +36,10 @@ public class World : MonoBehaviour
 
     private IEnumerator GenerateWorldRoutine()
     {
-        // KROK 1: Tworzenie obiektów i generowanie DANYCH (Compute Shader)
-        // W tej pêtli NIE generujemy jeszcze meshy!
+        Stopwatch dataTimer = new Stopwatch();
+        Stopwatch meshTimer = new Stopwatch();
 
+        dataTimer.Start();
         for (int x = 0; x < startSize.x; x++)
         {
             for (int y = 0; y < startSize.y; y++)
@@ -49,26 +52,51 @@ public class World : MonoBehaviour
                     GameObject newChunkObj = Instantiate(chunkPrefab, worldPos, Quaternion.identity, transform);
                     Chunk newChunk = newChunkObj.GetComponent<Chunk>();
 
-                    // Rejestrujemy w s³owniku
                     chunkMap.Add(coord, newChunk);
 
-                    // Inicjalizujemy TYLKO dane (Shader)
                     newChunk.InitializeData(coord, chunkSize, this);
                 }
             }
-            // Robimy przerwê co "piêtro" generowania, ¿eby nie œci¹æ gry
-            yield return null;
+            //yield return null;
         }
-
-        // KROK 2: Generowanie MESHY
-        // Teraz, gdy wszystkie chunki maj¹ ju¿ dane w pamiêci, mo¿emy bezpiecznie budowaæ œciany
-
+        dataTimer.Stop();
+        meshTimer.Start();
         foreach (var chunk in chunkMap.Values)
         {
             chunk.UpdateMesh();
-            // Opcjonalnie: yield return null co X chunków, jeœli fps spada
+            //yield return null;
+        }
+        meshTimer.Stop();
+
+        long totalVoxelDataMemory = 0;
+        long totalMeshMemory = 0;
+
+        foreach (var chunk in chunkMap.Values)
+        {
+            if (chunk.VoxelData != null)
+            {
+                totalVoxelDataMemory += chunk.VoxelData.Length * sizeof(byte);
+            }
+
+            if (chunk.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null)
+            {
+                totalMeshMemory += Profiler.GetRuntimeMemorySizeLong(mf.sharedMesh);
+            }
         }
 
-        Debug.Log($"Wygenerowano œwiat: {chunkMap.Count} chunków.");
+        double voxelMB = totalVoxelDataMemory / (1024.0 * 1024.0);
+        double meshMB = totalMeshMemory / (1024.0 * 1024.0);
+
+        UnityEngine.Debug.Log($"--- POPRAWIONY RAPORT PAMIÊCI ---");
+        UnityEngine.Debug.Log($"VoxelData (C# Heap): {voxelMB:F2} MB");
+        UnityEngine.Debug.Log($"Meshe (Unity Engine): {meshMB:F2} MB");
+        UnityEngine.Debug.Log($"Suma: {voxelMB + meshMB:F2} MB");
+        UnityEngine.Debug.Log($"Wygenerowano œwiat: {chunkMap.Count} chunków.");
+        UnityEngine.Debug.Log($"--- RAPORT GENEROWANIA ---");
+        UnityEngine.Debug.Log($"Dane (GPU + Transfer): {dataTimer.ElapsedMilliseconds} ms");
+        UnityEngine.Debug.Log($"Meshe (CPU): {meshTimer.ElapsedMilliseconds} ms");
+        UnityEngine.Debug.Log($"Ca³kowity czas: {dataTimer.ElapsedMilliseconds + meshTimer.ElapsedMilliseconds} ms");
+
+        yield break;
     }
 }
