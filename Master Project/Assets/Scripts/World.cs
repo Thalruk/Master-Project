@@ -15,7 +15,6 @@ public class World : MonoBehaviour
 {
     [SerializeField] Vector3Int startSize = new Vector3Int(4, 2, 4);
     [SerializeField] int chunkSize = 16;
-    [SerializeField] GameObject chunkPrefab;
 
     Dictionary<Vector3Int, Chunk> chunkMap = new Dictionary<Vector3Int, Chunk>();
 
@@ -99,9 +98,8 @@ public class World : MonoBehaviour
             for (int i = 0; i < chunksToGeneratePerFrame && chunksToGenerate.Count > 0; i++)
             {
                 Vector3Int coord = chunksToGenerate.Dequeue();
-                Vector3 worldPos = new Vector3(coord.x * chunkSize, coord.y * chunkSize, coord.z * chunkSize);
-                GameObject newChunkObj = Instantiate(chunkPrefab, worldPos, Quaternion.identity, transform);
-                Chunk newChunk = newChunkObj.GetComponent<Chunk>();
+                Vector3Int worldPos = new Vector3Int(coord.x * chunkSize, coord.y * chunkSize, coord.z * chunkSize);
+                Chunk newChunk = ChunkPool.Instance.GetChunk(worldPos);
                 chunkMap.Add(coord, newChunk);
                 newChunk.InitializeData(coord, chunkSize, this);
             }
@@ -167,15 +165,13 @@ public class World : MonoBehaviour
     public void RegenerateWorld()
     {
         StopAllCoroutines();
+        foreach (var chunk in chunkMap.Values)
+        {
+            ChunkPool.Instance.ReturnChunk(chunk);
+        }
         chunkMap.Clear();
         chunksToGenerate.Clear();
         chunksToMesh.Clear();
-
-        while (transform.childCount > 0)
-        {
-            DestroyImmediate(transform.GetChild(0).gameObject);
-        }
-
         StartCoroutine(GenerateWorldRoutine());
     }
 }

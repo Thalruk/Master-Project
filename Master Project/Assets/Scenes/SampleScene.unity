@@ -133,6 +133,7 @@ GameObject:
   m_Component:
   - component: {fileID: 105452421}
   - component: {fileID: 105452420}
+  - component: {fileID: 105452422}
   m_Layer: 0
   m_Name: World
   m_TagString: Untagged
@@ -152,9 +153,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a51a2ed0b6fb34e4da95933f24241817, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  startSize: {x: 20, y: 20, z: 20}
+  startSize: {x: 12, y: 16, z: 12}
   chunkSize: 16
-  chunkPrefab: {fileID: 5475054195370043391, guid: a9c3c85679097604b8fc0531cde57470, type: 3}
   ShowFrustumCullingInSceneView: 0
   chunksToGeneratePerFrame: 100
 --- !u!4 &105452421
@@ -172,6 +172,19 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 1
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &105452422
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 105452419}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2e2a675f6b3641d43b77e7110ace9b3f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  chunkPrefab: {fileID: 5475054195370043391, guid: a9c3c85679097604b8fc0531cde57470, type: 3}
 --- !u!1 &702884405
 GameObject:
   m_ObjectHideFlags: 0

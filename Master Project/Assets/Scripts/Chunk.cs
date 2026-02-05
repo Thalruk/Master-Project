@@ -12,14 +12,10 @@ public class Chunk : MonoBehaviour
     private World worldRef;
     private ComputeShader voxelShader;
 
-    [SerializeField] MeshFilter meshFilter;
+    [SerializeField] public MeshFilter meshFilter;
     [SerializeField] public MeshRenderer meshRenderer;
 
     [SerializeField] ComputeShader assignedShader;
-
-
-
-
     struct FaceData
     {
         public int[] vertIndices;
@@ -53,7 +49,10 @@ public class Chunk : MonoBehaviour
         this.voxelShader = assignedShader;
 
         int totalVoxels = size * size * size;
-        VoxelData = new byte[totalVoxels];
+        if (VoxelData == null || VoxelData.Length != totalVoxels)
+        {
+            VoxelData = new byte[totalVoxels];
+        }
 
         ComputeBuffer buffer = new ComputeBuffer(totalVoxels / 4, 4);
 
@@ -84,7 +83,19 @@ public class Chunk : MonoBehaviour
     public void UpdateMesh()
     {
         vertices.Clear(); triangles.Clear(); uvs.Clear();
-        if (meshFilter.sharedMesh != null) meshFilter.sharedMesh.Clear();
+
+        Mesh mesh = meshFilter.sharedMesh;
+
+        if (mesh == null)
+        {
+            mesh = new Mesh();
+            mesh.indexFormat = IndexFormat.UInt32;
+            meshFilter.sharedMesh = mesh;
+        }
+        else
+        {
+            mesh.Clear();
+        }
 
         Chunk nUp = worldRef.GetChunk(GridCoord + Vector3Int.up);
         Chunk nDown = worldRef.GetChunk(GridCoord + Vector3Int.down);
@@ -134,15 +145,11 @@ public class Chunk : MonoBehaviour
                 }
             }
         }
-        Mesh mesh = new Mesh();
-        mesh.indexFormat = IndexFormat.UInt32;
-        mesh.vertices = vertices.ToArray();
-        mesh.triangles = triangles.ToArray();
+        mesh.SetVertices(vertices);
+        mesh.SetTriangles(triangles, 0);
         mesh.SetUVs(0, uvs);
         mesh.RecalculateBounds();
         mesh.RecalculateNormals();
-
-        meshFilter.mesh = mesh;
     }
     bool IsSolidFast(int x, int y, int z, Chunk up, Chunk down, Chunk right, Chunk left, Chunk front, Chunk back)
     {
