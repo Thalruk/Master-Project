@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cdb745482f37c77439651f55ff8cafe5, type: 3}
+  m_Name: first profile
+  m_EditorClassIdentifier: 
+  textures:
+  - {fileID: 2800000, guid: 82bd88ed42079a94d88bb8ef82d8a327, type: 3}
+  - {fileID: 2800000, guid: a2db18bd48fe37b4a85802a1875f25c2, type: 3}
+  - {fileID: 2800000, guid: a1566a4cf0ac80348b2734e51ca93c58, type: 3}
+  - {fileID: 2800000, guid: b31bc2e3810a4414fb0a5604acc9e85a, type: 3}
+  - {fileID: 2800000, guid: 1e494d345638c59449f3d85144c1c491, type: 3}
+  - {fileID: 2800000, guid: e610b8cc7a6ef0e459cfe1fa323fac89, type: 3}
+  targetArray: {fileID: 18700000, guid: bab2001166aea7a48b7531ad20492a55, type: 2}
+  filterMode: 0
+  wrapMode: 0
+  anisoLevel: 16

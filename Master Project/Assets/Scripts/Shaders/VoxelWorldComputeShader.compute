@@ -92,46 +92,77 @@ void GenerateVoxelData(uint3 id : SV_DispatchThreadID)
 
     float3 globalPos = ChunkOffset + (float3) id;
 
-    float scale = 0.01; 
-    float maxAmplitude = 80.0; 
-    int octaves = 3; 
-    float persistence = 0.5; 
-    float lacunarity = 2.0; 
-    float baseHeight = 30.0; 
+    // --- 1. BASE TERRAIN (Lowered for clear gap) ---
+    // Reduced baseHeight to 20 and maxAmplitude to 40 to prevent "monoliths"
+    float density = 20.0 - globalPos.y;
+    float scale = 0.01;
+    float maxAmplitude = 40.0; // Lowered from 80
+    int octaves = 3;
+    float persistence = 0.5;
+    float lacunarity = 2.0;
 
-    float noiseHeight = 0;
-    float density = 30.0 - globalPos.y; 
     float frequency = scale;
     float amplitude = maxAmplitude;
 
     for (int i = 0; i < octaves; i++)
     {
         density += snoise(globalPos * frequency) * amplitude;
-    
         if (abs(density) > 20.0)
-        {
             break;
-        }
-
         amplitude *= persistence;
         frequency *= lacunarity;
     }
 
-    int blockType = 0;
-    if (density > 0) 
+    // --- 2. FLOATING ISLANDS (Localized and detached) ---
+    float islandDensity = -100.0;
+    
+    // Increased frequency and lowered threshold to see islands more often
+    float islandMask = snoise(float3(globalPos.x * 0.01, 0, globalPos.z * 0.01));
+
+    if (islandMask > 0.3) // Lowered from 0.6 to find them easier
     {
-        if (density > 10)
-            blockType = 3;
-        else if (density > 2)
-            blockType = 2; 
+        float islandCenterHeight = 150.0;
+        
+        // Stronger domain warping for better "Terraria" shapes
+        float3 warp = float3(snoise(globalPos * 0.03), snoise(globalPos * 0.03 + 1.0), snoise(globalPos * 0.03 + 2.0)) * 15.0;
+        float3 distortedPos = globalPos + warp;
+
+        float shape = snoise(distortedPos * 0.02) * 30.0;
+        
+        // SQUARED FALLOFF: This is the key to stopping "monoliths"
+        float distFromCenter = globalPos.y - islandCenterHeight;
+        
+        // Squared distance makes the density drop off exponentially
+        float falloff = (distFromCenter * distFromCenter) * 0.2;
+
+        islandDensity = shape - falloff;
+        islandDensity *= (islandMask - 0.3) * 5.0;
+    }
+
+    // --- 3. COMBINE & DEBUG COLORS ---
+    float groundDensity = density;
+    float finalDensity = max(groundDensity, islandDensity);
+
+    int blockType = 0;
+
+    // If island is stronger and actually exists, paint it yellow (ID 4)
+    if (islandDensity > groundDensity && islandDensity > 0)
+    {
+        blockType = 4;
+    }
+    else if (groundDensity > 0)
+    {
+        if (groundDensity > 10)
+            blockType = 3; // Stone
+        else if (groundDensity > 2)
+            blockType = 2; // Dirt
         else
-            blockType = 1; 
+            blockType = 1; // Grass
     }
 
     int index = id.x + (id.y * ChunkSize) + (id.z * ChunkSize * ChunkSize);
-    int uintIndex = (uint) index / 4;
-    int byteOffset = (uint)index % 4;
-
+    uint uintIndex = (uint) index / 4;
+    uint byteOffset = (uint) index % 4;
     uint packedValue = (uint) blockType << (byteOffset * 8);
     InterlockedOr(ResultBuffer[uintIndex], packedValue);
 }

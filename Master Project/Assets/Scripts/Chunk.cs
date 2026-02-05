@@ -178,8 +178,27 @@ public class Chunk : MonoBehaviour
         foreach (int i in face.vertIndices) vertices.Add(vertexPos[i] + pos);
         triangles.AddRange(new int[] { v, v + 1, v + 2, v + 2, v + 3, v });
 
-        float idx = (type == BlockType.Grass) ? (face.direction.y > 0 ? 0 : (face.direction.y < 0 ? 2 : 1)) :
-                    (type == BlockType.Dirt ? 2 : 3);
+
+        float idx = 0; // Default to Magenta
+
+        if (type == BlockType.Grass)
+        {
+            // Grass logic shifted by +1
+            idx = (face.direction.y > 0 ? 1 : (face.direction.y < 0 ? 3 : 2));
+        }
+        else if (type == BlockType.Dirt)
+        {
+            idx = 3; // Dirt
+        }
+        else if (type == BlockType.Stone)
+        {
+            idx = 4; // Stone
+        }
+        else if ((int)type == 4) // Our new Island ID from Compute Shader
+        {
+            idx = 5; // Island Debug Color
+        }
+
         uvs.Add(new Vector3(0, 1, idx)); uvs.Add(new Vector3(0, 0, idx));
         uvs.Add(new Vector3(1, 0, idx)); uvs.Add(new Vector3(1, 1, idx));
     }
