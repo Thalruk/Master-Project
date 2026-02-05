@@ -13,9 +13,12 @@ public class Chunk : MonoBehaviour
     private ComputeShader voxelShader;
 
     [SerializeField] MeshFilter meshFilter;
-    [SerializeField] MeshRenderer meshRenderer;
+    [SerializeField] public MeshRenderer meshRenderer;
 
     [SerializeField] ComputeShader assignedShader;
+
+
+
 
     struct FaceData
     {
@@ -75,7 +78,7 @@ public class Chunk : MonoBehaviour
 
             buffer.Dispose();
 
-            worldRef.OnDataReady();
+            worldRef.OnDataReady(this);
         });
     }
     public void UpdateMesh()
@@ -132,7 +135,7 @@ public class Chunk : MonoBehaviour
             }
         }
         Mesh mesh = new Mesh();
-        mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+        mesh.indexFormat = IndexFormat.UInt32;
         mesh.vertices = vertices.ToArray();
         mesh.triangles = triangles.ToArray();
         mesh.SetUVs(0, uvs);
@@ -158,9 +161,9 @@ public class Chunk : MonoBehaviour
 
         if (target != null)
         {
-            int nx = (x + size) % size;
-            int ny = (y + size) % size;
-            int nz = (z + size) % size;
+            int nx = ((x % size) + size) % size;
+            int ny = ((y % size) + size) % size;
+            int nz = ((z % size) + size) % size;
             return target.VoxelData[nx + (ny * size) + (nz * size * size)] != 0;
         }
 
@@ -179,11 +182,10 @@ public class Chunk : MonoBehaviour
         triangles.AddRange(new int[] { v, v + 1, v + 2, v + 2, v + 3, v });
 
 
-        float idx = 0; // Default to Magenta
+        float idx = 0; // Default is Magenta
 
         if (type == BlockType.Grass)
         {
-            // Grass logic shifted by +1
             idx = (face.direction.y > 0 ? 1 : (face.direction.y < 0 ? 3 : 2));
         }
         else if (type == BlockType.Dirt)
@@ -194,7 +196,7 @@ public class Chunk : MonoBehaviour
         {
             idx = 4; // Stone
         }
-        else if ((int)type == 4) // Our new Island ID from Compute Shader
+        else if ((int)type == 4)
         {
             idx = 5; // Island Debug Color
         }

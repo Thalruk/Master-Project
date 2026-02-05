@@ -152,9 +152,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a51a2ed0b6fb34e4da95933f24241817, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  startSize: {x: 25, y: 50, z: 25}
+  startSize: {x: 20, y: 20, z: 20}
   chunkSize: 16
   chunkPrefab: {fileID: 5475054195370043391, guid: a9c3c85679097604b8fc0531cde57470, type: 3}
+  ShowFrustumCullingInSceneView: 0
+  chunksToGeneratePerFrame: 100
 --- !u!4 &105452421
 Transform:
   m_ObjectHideFlags: 0
