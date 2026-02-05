@@ -17,7 +17,7 @@ public class TextureArrayCreator : ScriptableWizard
 
         Texture2D t = textures[0];
 
-        Texture2DArray textureArray = new Texture2DArray(t.width, t.height, textures.Length, t.format, true);
+        Texture2DArray textureArray = new Texture2DArray(t.width, t.height, textures.Length, TextureFormat.RGBA32, true);
 
         textureArray.filterMode = FilterMode.Point;
         textureArray.wrapMode = TextureWrapMode.Repeat;

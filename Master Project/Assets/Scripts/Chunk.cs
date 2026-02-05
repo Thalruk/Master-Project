@@ -55,7 +55,7 @@ public class Chunk : MonoBehaviour
         ComputeBuffer buffer = new ComputeBuffer(totalVoxels / 4, 4);
 
         buffer.SetData(new uint[totalVoxels / 4]);
-        int kernel = voxelShader.FindKernel("CSMain");
+        int kernel = voxelShader.FindKernel("GenerateVoxelData");
         voxelShader.SetBuffer(kernel, "ResultBuffer", buffer);
         voxelShader.SetInt("ChunkSize", size);
         voxelShader.SetVector("ChunkOffset", transform.position);
@@ -99,16 +99,33 @@ public class Chunk : MonoBehaviour
                     if (!IsSolidFast(x, y, z, nUp, nDown, nRight, nLeft, nFront, nBack)) continue;
 
 
-                    Vector3Int pos = new Vector3Int(x, y, z);
                     int myBlockID = GetBlockLocal(x, y, z);
+                    if (myBlockID == 0) continue;
+
+                    Vector3Int pos = new Vector3Int(x, y, z);
+                    BlockType renderType = (BlockType)myBlockID;
+
+                    if (renderType == BlockType.Grass)
+                    {
+                        if (IsSolidFast(x, y + 1, z, nUp, nDown, nRight, nLeft, nFront, nBack))
+                        {
+                            renderType = BlockType.Dirt;
+                        }
+                    }
+                    else if (renderType == BlockType.Dirt)
+                    {
+                        if (!IsSolidFast(x, y + 1, z, nUp, nDown, nRight, nLeft, nFront, nBack))
+                        {
+                            renderType = BlockType.Grass;
+                        }
+                    }
 
                     foreach (var face in faces)
                     {
                         Vector3Int neighborPos = pos + face.direction;
-
                         if (!IsSolidFast(neighborPos.x, neighborPos.y, neighborPos.z, nUp, nDown, nRight, nLeft, nFront, nBack))
                         {
-                            AddFace(pos, face, (BlockType)myBlockID);
+                            AddFace(pos, face, renderType);
                         }
                     }
                 }
@@ -153,38 +170,6 @@ public class Chunk : MonoBehaviour
     int GetBlockLocal(int x, int y, int z)
     {
         return VoxelData[x + (y * size) + (z * size * size)];
-    }
-
-    bool IsSolid(int x, int y, int z)
-    {
-        if (x >= 0 && x < size && y >= 0 && y < size && z >= 0 && z < size)
-        {
-            return GetBlockLocal(x, y, z) != 0;
-        }
-
-        Vector3Int neighborDir = new Vector3Int(0, 0, 0);
-        if (x < 0) neighborDir.x = -1;
-        else if (x >= size) neighborDir.x = 1;
-
-        if (y < 0) neighborDir.y = -1;
-        else if (y >= size) neighborDir.y = 1;
-
-        if (z < 0) neighborDir.z = -1;
-        else if (z >= size) neighborDir.z = 1;
-
-        Chunk neighborChunk = worldRef.GetChunk(GridCoord + neighborDir);
-
-        if (neighborChunk != null)
-        {
-            int nx = (x + size) % size;
-            int ny = (y + size) % size;
-            int nz = (z + size) % size;
-
-            int neighborBlock = neighborChunk.VoxelData[nx + (ny * size) + (nz * size * size)];
-            return neighborBlock != 0;
-        }
-
-        return false;
     }
 
     void AddFace(Vector3Int pos, FaceData face, BlockType type)
