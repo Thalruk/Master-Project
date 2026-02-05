@@ -26,11 +26,9 @@ float snoise(float3 v)
     const float2 C = float2(1.0 / 6.0, 1.0 / 3.0);
     const float4 D = float4(0.0, 0.5, 1.0, 2.0);
 
-    // First corner
     float3 i = floor(v + dot(v, C.yyy));
     float3 x0 = v - i + dot(i, C.xxx);
 
-    // Other corners
     float3 g = step(x0.yzx, x0.xyz);
     float3 l = 1.0 - g;
     float3 i1 = min(g.xyz, l.zxy);
@@ -92,11 +90,9 @@ void GenerateVoxelData(uint3 id : SV_DispatchThreadID)
 
     float3 globalPos = ChunkOffset + (float3) id;
 
-    // --- 1. BASE TERRAIN (Lowered for clear gap) ---
-    // Reduced baseHeight to 20 and maxAmplitude to 40 to prevent "monoliths"
     float density = 20.0 - globalPos.y;
     float scale = 0.01;
-    float maxAmplitude = 40.0; // Lowered from 80
+    float maxAmplitude = 40.0; 
     int octaves = 3;
     float persistence = 0.5;
     float lacunarity = 2.0;
@@ -113,39 +109,32 @@ void GenerateVoxelData(uint3 id : SV_DispatchThreadID)
         frequency *= lacunarity;
     }
 
-    // --- 2. FLOATING ISLANDS (Localized and detached) ---
     float islandDensity = -100.0;
     
-    // Increased frequency and lowered threshold to see islands more often
     float islandMask = snoise(float3(globalPos.x * 0.01, 0, globalPos.z * 0.01));
 
-    if (islandMask > 0.3) // Lowered from 0.6 to find them easier
+    if (islandMask > 0.3) 
     {
         float islandCenterHeight = 150.0;
         
-        // Stronger domain warping for better "Terraria" shapes
         float3 warp = float3(snoise(globalPos * 0.03), snoise(globalPos * 0.03 + 1.0), snoise(globalPos * 0.03 + 2.0)) * 15.0;
         float3 distortedPos = globalPos + warp;
 
         float shape = snoise(distortedPos * 0.02) * 30.0;
         
-        // SQUARED FALLOFF: This is the key to stopping "monoliths"
         float distFromCenter = globalPos.y - islandCenterHeight;
         
-        // Squared distance makes the density drop off exponentially
         float falloff = (distFromCenter * distFromCenter) * 0.2;
 
         islandDensity = shape - falloff;
         islandDensity *= (islandMask - 0.3) * 5.0;
     }
 
-    // --- 3. COMBINE & DEBUG COLORS ---
     float groundDensity = density;
     float finalDensity = max(groundDensity, islandDensity);
 
     int blockType = 0;
 
-    // If island is stronger and actually exists, paint it yellow (ID 4)
     if (islandDensity > groundDensity && islandDensity > 0)
     {
         blockType = 4;
