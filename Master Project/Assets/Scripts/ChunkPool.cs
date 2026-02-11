@@ -40,12 +40,11 @@ public class ChunkPool : MonoBehaviour
 
     public void ReturnChunk(Chunk chunk)
     {
+        chunk.EnsureJobCompleted();
+
         chunk.transform.position = transform.position;
         chunk.meshRenderer.enabled = false;
-        if (chunk.meshFilter.sharedMesh != null)
-        {
-            chunk.meshFilter.sharedMesh.Clear();
-        }
+        if (chunk.meshFilter.sharedMesh != null) chunk.meshFilter.sharedMesh.Clear();
         chunk.gameObject.SetActive(false);
         pool.Enqueue(chunk);
     }

@@ -6,6 +6,7 @@ Shader "Custom/VoxelTextureShader"
         _MainTex ("Texture Array", 2DArray) = "" {}
         _Glossiness ("Smoothness", Range(0,1)) = 0.0
         _Metallic ("Metallic", Range(0,1)) = 0.0
+        _AOStrength ("AO Strength", Range(0,1)) = 0.0
     }
     SubShader
     {
@@ -22,6 +23,7 @@ Shader "Custom/VoxelTextureShader"
         {
             float2 uv_MainTex;
             float texIndex;
+            float4 color : COLOR;
         };
 
         void vert (inout appdata_full v, out Input o)
@@ -29,18 +31,20 @@ Shader "Custom/VoxelTextureShader"
             UNITY_INITIALIZE_OUTPUT(Input, o);
             o.uv_MainTex = v.texcoord.xy;
             o.texIndex = v.texcoord.z;
+            o.color = v.color;
         }
 
         half _Glossiness;
         half _Metallic;
         fixed4 _Color;
+        float _AOStrength;
 
         void surf (Input IN, inout SurfaceOutputStandard o)
         {
             float3 uv3 = float3(IN.uv_MainTex, IN.texIndex);
             fixed4 c = UNITY_SAMPLE_TEX2DARRAY(_MainTex, uv3) * _Color;
             
-            o.Albedo = c.rgb;
+            o.Albedo = c.rgb * lerp(fixed3(1,1,1), IN.color.rgb, _AOStrength);
             o.Metallic = _Metallic;
             o.Smoothness = _Glossiness;
             o.Alpha = c.a;

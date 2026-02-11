@@ -1,8 +1,8 @@
 #pragma kernel GenerateVoxelData
 
 RWStructuredBuffer<uint> ResultBuffer;
-float3 ChunkOffset; 
-int ChunkSize; 
+float3 ChunkOffset;
+int ChunkSize;
 
 float3 mod289(float3 x)
 {
@@ -18,7 +18,7 @@ float4 permute(float4 x)
 }
 float4 taylorInvSqrt(float4 r)
 {
-    return 1.79284291400159 - 0.85373472095314 * r;
+    return rsqrt(r);;
 }
 
 float snoise(float3 v)
@@ -39,14 +39,10 @@ float snoise(float3 v)
     float3 x3 = x0 - D.yyy;
 
     i = mod289(i);
-    float4 p = permute(permute(permute(
-        i.z + float4(0.0, i1.z, i2.z, 1.0))
-        + i.y + float4(0.0, i1.y, i2.y, 1.0))
-        + i.x + float4(0.0, i1.x, i2.x, 1.0));
+    float4 p = permute(permute(permute(i.z + float4(0.0, i1.z, i2.z, 1.0)) + i.y + float4(0.0, i1.y, i2.y, 1.0)) + i.x + float4(0.0, i1.x, i2.x, 1.0));
 
     float n_ = 1.0 / 7.0;
     float3 ns = n_ * D.wyz - D.xzx;
-
     float4 j = p - 49.0 * floor(p * ns.z * ns.z);
 
     float4 x_ = floor(j * ns.z);
@@ -82,17 +78,11 @@ float snoise(float3 v)
     return 42.0 * dot(m * m, float4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));
 }
 
-[numthreads(8, 8, 8)]
-void GenerateVoxelData(uint3 id : SV_DispatchThreadID)
+float2 GetDensity(float3 globalPos)
 {
-    if (id.x >= (uint) ChunkSize || id.y >= (uint) ChunkSize || id.z >= (uint) ChunkSize)
-        return;
-
-    float3 globalPos = ChunkOffset + (float3) id;
-
     float density = 20.0 - globalPos.y;
     float scale = 0.01;
-    float maxAmplitude = 40.0; 
+    float maxAmplitude = 40.0;
     int octaves = 3;
     float persistence = 0.5;
     float lacunarity = 2.0;
@@ -110,43 +100,61 @@ void GenerateVoxelData(uint3 id : SV_DispatchThreadID)
     }
 
     float islandDensity = -100.0;
-    
     float islandMask = snoise(float3(globalPos.x * 0.01, 0, globalPos.z * 0.01));
 
-    if (islandMask > 0.3) 
+    if (islandMask > 0.3)
     {
         float islandCenterHeight = 150.0;
-        
         float3 warp = float3(snoise(globalPos * 0.03), snoise(globalPos * 0.03 + 1.0), snoise(globalPos * 0.03 + 2.0)) * 15.0;
         float3 distortedPos = globalPos + warp;
-
         float shape = snoise(distortedPos * 0.02) * 30.0;
-        
         float distFromCenter = globalPos.y - islandCenterHeight;
-        
         float falloff = (distFromCenter * distFromCenter) * 0.2;
-
         islandDensity = shape - falloff;
         islandDensity *= (islandMask - 0.3) * 5.0;
     }
 
-    float groundDensity = density;
-    float finalDensity = max(groundDensity, islandDensity);
+    return float2(density, islandDensity);
+}
+
+[numthreads(8, 8, 8)]
+void GenerateVoxelData(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= (uint) ChunkSize || id.y >= (uint) ChunkSize || id.z >= (uint) ChunkSize) 
+        return;
+
+    float3 globalPos = ChunkOffset + float3(id);
+
+    float2 densities = GetDensity(globalPos);
+    float currentGround = densities.x;
+    float currentIsland = densities.y;
+    float currentFinal = max(currentGround, currentIsland);
 
     int blockType = 0;
 
-    if (islandDensity > groundDensity && islandDensity > 0)
+    if (currentFinal > 0)
     {
-        blockType = 4;
-    }
-    else if (groundDensity > 0)
-    {
-        if (groundDensity > 10)
-            blockType = 3; // Stone
-        else if (groundDensity > 2)
-            blockType = 2; // Dirt
+        float2 densitiesAbove = GetDensity(globalPos + float3(0, 1, 0));
+        float aboveFinal = max(densitiesAbove.x, densitiesAbove.y);
+
+        if (currentIsland > currentGround)
+        {
+            blockType = 4; // Island Debug Color 
+        }
         else
-            blockType = 1; // Grass
+        {
+            if (aboveFinal <= 0) // Nad nami jest powietrze
+            {
+                blockType = 1; // Grass
+            }
+            else // Nad nami jest inny blok
+            {
+                if (currentGround > 10)
+                blockType = 3; // Stone
+                else
+                blockType = 2; // Dirt
+            }
+        }
     }
 
     int index = id.x + (id.y * ChunkSize) + (id.z * ChunkSize * ChunkSize);
