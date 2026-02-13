@@ -9,7 +9,9 @@ public enum BlockType : byte
     Grass,
     Dirt,
     Stone,
-    Bedrock
+    Bedrock,
+    Coal,
+    IronOre,
 }
 
 public class World : MonoBehaviour
@@ -29,7 +31,7 @@ public class World : MonoBehaviour
     List<Vector3Int> chunksToGenerate = new List<Vector3Int>();
 
     HashSet<Chunk> chunksToMesh = new HashSet<Chunk>();
-
+    private List<Vector3Int> toRemove = new List<Vector3Int>();
     private HashSet<Vector3Int> chunksInQueue = new HashSet<Vector3Int>();
 
     [Header("Infinite World Settings")]
@@ -190,8 +192,15 @@ public class World : MonoBehaviour
             float dist = (rel.x * rel.x) / (marginX * marginX) +
                          (rel.y * rel.y) / (marginY * marginY) +
                          (rel.z * rel.z) / (marginZ * marginZ);
-            return dist > 1.0f;
+
+            if (dist > 1.0f)
+            {
+                chunksInQueue.Remove(coord);
+                return true;
+            }
+            return false;
         });
+
 
         for (int x = -startSize.x; x <= startSize.x; x++)
         {
@@ -225,6 +234,7 @@ public class World : MonoBehaviour
                           (b.z - center.z) * (b.z - center.z);
             return distSqA.CompareTo(distSqB);
         });
+
     }
 
 

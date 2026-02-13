@@ -19,7 +19,9 @@ MonoBehaviour:
   - {fileID: 2800000, guid: b31bc2e3810a4414fb0a5604acc9e85a, type: 3}
   - {fileID: 2800000, guid: 1e494d345638c59449f3d85144c1c491, type: 3}
   - {fileID: 2800000, guid: e610b8cc7a6ef0e459cfe1fa323fac89, type: 3}
-  targetArray: {fileID: 18700000, guid: bab2001166aea7a48b7531ad20492a55, type: 2}
+  - {fileID: 2800000, guid: 29e72b58f9895f946a19590da8ff474a, type: 3}
+  - {fileID: 2800000, guid: 5c8cd76b7a82bc84b98bcbfb1cec99ae, type: 3}
+  targetArray: {fileID: 18700000, guid: 2ed66cc89db8f6f4499f9d12450ffe2d, type: 2}
   filterMode: 0
   wrapMode: 0
   anisoLevel: 16

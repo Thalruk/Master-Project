@@ -14,7 +14,8 @@ Shader "Custom/VoxelTextureShader"
         LOD 200
 
         CGPROGRAM
-        #pragma surface surf Standard fullforwardshadows vertex:vert
+        #pragma surface surf Standard fullforwardshadows vertex:vert addshadow
+        #pragma multi_compile_instancing
         #pragma target 3.5
 
         UNITY_DECLARE_TEX2DARRAY(_MainTex);

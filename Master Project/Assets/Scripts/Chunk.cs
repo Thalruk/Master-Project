@@ -94,7 +94,14 @@ public class Chunk : MonoBehaviour
 
         AsyncGPUReadback.Request(_voxelBuffer, (AsyncGPUReadbackRequest request) =>
         {
-            if (request.hasError || !VoxelData.IsCreated || coord != GridCoord) return;
+            if (!VoxelData.IsCreated || coord != GridCoord) return;
+
+            if (request.hasError)
+            {
+                Debug.LogWarning($"GPU Readback error at {coord}, retrying...");
+                InitializeData(coord, size, worldRef);
+                return;
+            }
 
             var data = request.GetData<byte>();
             if (data.Length == VoxelData.Length)
@@ -121,16 +128,18 @@ public class Chunk : MonoBehaviour
         jobNormals.Clear();
         jobColors.Clear();
 
+        int paddedSize = size + 2;
+        int paddedLength = paddedSize * paddedSize * paddedSize;
+
+        NativeArray<byte> paddedData = new NativeArray<byte>(paddedLength, Allocator.TempJob);
+
+        BuildPaddedData(paddedData, paddedSize);
+
         MeshJob meshJob = new MeshJob
         {
-            centerData = VoxelData,
-            up = GetNeighborData(Vector3Int.up),
-            down = GetNeighborData(Vector3Int.down),
-            left = GetNeighborData(Vector3Int.left),
-            right = GetNeighborData(Vector3Int.right),
-            front = GetNeighborData(new Vector3Int(0, 0, 1)),
-            back = GetNeighborData(new Vector3Int(0, 0, -1)),
+            paddedData = paddedData,
             size = size,
+            paddedSize = paddedSize,
             vertices = jobVertices,
             triangles = jobTriangles,
             uvs = jobUvs,
@@ -139,7 +148,63 @@ public class Chunk : MonoBehaviour
         };
 
         meshJobHandle = meshJob.Schedule();
+
+        paddedData.Dispose(meshJobHandle);
+
         isMeshJobActive = true;
+    }
+
+
+    private void BuildPaddedData(NativeArray<byte> paddedData, int paddedSize)
+    {
+        Chunk lastCachedChunk = null;
+        Vector3Int lastCachedChunkCoord = new Vector3Int(int.MinValue, int.MinValue, int.MinValue);
+
+        for (int x = -1; x <= size; x++)
+        {
+            for (int y = -1; y <= size; y++)
+            {
+                for (int z = -1; z <= size; z++)
+                {
+                    int padIndex = (x + 1) + (y + 1) * paddedSize + (z + 1) * paddedSize * paddedSize;
+                    byte voxel = 0;
+
+                    if (x >= 0 && x < size && y >= 0 && y < size && z >= 0 && z < size)
+                    {
+                        voxel = VoxelData[x + y * size + z * size * size];
+                    }
+                    else
+                    {
+                        Vector3Int globalPos = (GridCoord * size) + new Vector3Int(x, y, z);
+
+                        int cx = Mathf.FloorToInt((float)globalPos.x / size);
+                        int cy = Mathf.FloorToInt((float)globalPos.y / size);
+                        int cz = Mathf.FloorToInt((float)globalPos.z / size);
+                        Vector3Int targetChunkCoord = new Vector3Int(cx, cy, cz);
+
+                        if (targetChunkCoord != lastCachedChunkCoord)
+                        {
+                            lastCachedChunk = worldRef.GetChunk(targetChunkCoord);
+                            lastCachedChunkCoord = targetChunkCoord;
+                        }
+
+                        if (lastCachedChunk != null && lastCachedChunk.IsReady)
+                        {
+                            int lx = ((globalPos.x % size) + size) % size;
+                            int ly = ((globalPos.y % size) + size) % size;
+                            int lz = ((globalPos.z % size) + size) % size;
+                            voxel = lastCachedChunk.VoxelData[lx + ly * size + lz * size * size];
+                        }
+                        else
+                        {
+                            voxel = 0;
+                        }
+                    }
+
+                    paddedData[padIndex] = voxel;
+                }
+            }
+        }
     }
 
     private void LateUpdate()
@@ -170,18 +235,26 @@ public class Chunk : MonoBehaviour
             mesh.SetIndices(jobTriangles.AsArray(), MeshTopology.Triangles, 0);
             mesh.SetUVs(0, jobUvs.AsArray());
             mesh.SetNormals(jobNormals.AsArray());
-            mesh.RecalculateBounds();
+            mesh.bounds = new Bounds(new Vector3(size / 2f, size / 2f, size / 2f), new Vector3(size, size, size));
             mesh.SetColors(jobColors.AsArray());
         }
     }
 
-    private NativeArray<byte> GetNeighborData(Vector3Int offset)
+    private byte GetVoxelFromWorldSlow(Vector3Int globalPos)
     {
-        Chunk neighbor = worldRef.GetChunk(GridCoord + offset);
-        if (neighbor == null || !neighbor.IsReady)
-            return worldRef.EmptyVoxelData;
+        Vector3Int chunkCoord = new Vector3Int(
+            Mathf.FloorToInt(globalPos.x / (float)size),
+            Mathf.FloorToInt(globalPos.y / (float)size),
+            Mathf.FloorToInt(globalPos.z / (float)size)
+        );
 
-        return neighbor.VoxelData;
+        Chunk chunk = worldRef.GetChunk(chunkCoord);
+        if (chunk == null || !chunk.IsReady) return 0;
+        int lx = ((globalPos.x % size) + size) % size;
+        int ly = ((globalPos.y % size) + size) % size;
+        int lz = ((globalPos.z % size) + size) % size;
+
+        return chunk.VoxelData[lx + ly * size + lz * size * size];
     }
 
     public void EnsureJobCompleted()

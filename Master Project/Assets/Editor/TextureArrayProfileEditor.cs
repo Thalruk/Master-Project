@@ -18,45 +18,67 @@ public class TextureArrayProfileEditor : Editor
 
     void UpdateTextureArray(TextureArrayProfile profile)
     {
-        if (profile.textures == null || profile.textures.Length == 0) return;
+        if (profile.textures == null || profile.textures.Length == 0)
+        {
+            Debug.LogError("Brak tekstur w profilu!");
+            return;
+        }
 
         Texture2D firstTex = profile.textures[0];
         int width = firstTex.width;
         int height = firstTex.height;
         int depth = profile.textures.Length;
+        TextureFormat format = firstTex.format;
 
-        bool needsRecreation = profile.targetArray == null ||
-                               profile.targetArray.width != width ||
-                               profile.targetArray.height != height ||
-                               profile.targetArray.depth != depth;
-
-        if (needsRecreation)
+        foreach (var tex in profile.textures)
         {
-            profile.targetArray = new Texture2DArray(width, height, depth, TextureFormat.RGBA32, true);
+            if (tex.width != width || tex.height != height)
+            {
+                Debug.LogError($"Tekstura {tex.name} ma inny rozmiar! Wszystkie musz¹ byæ {width}x{height}.");
+                return;
+            }
         }
 
-        profile.targetArray.filterMode = profile.filterMode;
-        profile.targetArray.wrapMode = profile.wrapMode;
-        profile.targetArray.anisoLevel = profile.anisoLevel;
+        Texture2DArray texArray = new Texture2DArray(width, height, depth, format, true);
+
+        texArray.filterMode = profile.filterMode;
+        texArray.wrapMode = profile.wrapMode;
+        texArray.anisoLevel = profile.anisoLevel;
 
         for (int i = 0; i < profile.textures.Length; i++)
         {
-            profile.targetArray.SetPixels(profile.textures[i].GetPixels(), i, 0);
+            for (int mip = 0; mip < firstTex.mipmapCount; mip++)
+            {
+                Graphics.CopyTexture(profile.textures[i], 0, mip, texArray, i, mip);
+            }
         }
 
-        profile.targetArray.Apply(true, false);
+        texArray.Apply(false, true);
 
-        if (needsRecreation)
+        // Zapisywanie assetu
+        string path = AssetDatabase.GetAssetPath(profile.targetArray);
+        if (string.IsNullOrEmpty(path))
         {
-            string path = EditorUtility.SaveFilePanelInProject("Save Texture Array", "WorldTextures", "asset", "Save your texture array");
-            if (!string.IsNullOrEmpty(path))
+            path = EditorUtility.SaveFilePanelInProject("Save Texture Array", "NewVoxelArray", "asset", "Zapisz TextureArray");
+        }
+
+        if (!string.IsNullOrEmpty(path))
+        {
+            if (profile.targetArray == null)
             {
-                AssetDatabase.CreateAsset(profile.targetArray, path);
+                AssetDatabase.CreateAsset(texArray, path);
             }
+            else
+            {
+                EditorUtility.CopySerialized(texArray, profile.targetArray);
+                AssetDatabase.SaveAssets();
+            }
+
+            profile.targetArray = AssetDatabase.LoadAssetAtPath<Texture2DArray>(path);
         }
 
         EditorUtility.SetDirty(profile);
         AssetDatabase.SaveAssets();
-        Debug.Log("Texture2DArray updated successfully!");
+        Debug.Log("Texture2DArray zaktualizowana pomyœlnie u¿ywaj¹c Graphics.CopyTexture!");
     }
 }

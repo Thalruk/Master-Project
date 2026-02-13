@@ -156,8 +156,8 @@ MonoBehaviour:
   startSize: {x: 12, y: 20, z: 12}
   chunkSize: 16
   ShowFrustumCullingInSceneView: 0
-  chunksToGeneratePerFrame: 100
-  chunksToMeshPerFrame: 100
+  chunksToGeneratePerFrame: 75
+  chunksToMeshPerFrame: 75
   playerTransform: {fileID: 702884406}
   unloadMargin: 2
 --- !u!4 &105452421
@@ -234,7 +234,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9defcbccb46130542990a557c895987f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  speed: 30
+  speed: 15
   sensitivity: 5
   speedMultiplier: 5
 --- !u!1 &705507993
@@ -389,7 +389,7 @@ Camera:
     width: 1
     height: 1
   near clip plane: 0.3
-  far clip plane: 1000
+  far clip plane: 400
   field of view: 60
   orthographic: 0
   orthographic size: 5
