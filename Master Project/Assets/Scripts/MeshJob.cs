@@ -214,10 +214,19 @@ public struct MeshJob : IJob
     }
     private Color32 AOToColor(int ao)
     {
-        byte intensity = (byte)(255 - (ao * 50));
+        float intensityFactor;
+
+        switch (ao)
+        {
+            case 1: intensityFactor = 0.5f; break;
+            case 2: intensityFactor = 0.15f; break;
+            case 3: intensityFactor = 0.0f; break;
+            default: intensityFactor = 1.0f; break;
+        }
+
+        byte intensity = (byte)(255 * intensityFactor);
         return new Color32(intensity, intensity, intensity, 255);
     }
-
     private float GetTextureIndex(byte blockID, int dy)
     {
         if (blockID == 1) // Grass

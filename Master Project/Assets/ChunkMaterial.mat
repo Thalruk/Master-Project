@@ -29,6 +29,7 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
+    - _AOIntensity: 1
     - _AOStrength: 1
     - _Glossiness: 0
     - _Metallic: 0

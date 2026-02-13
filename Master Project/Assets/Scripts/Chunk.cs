@@ -25,7 +25,7 @@ public class Chunk : MonoBehaviour
 
     private JobHandle meshJobHandle;
     private bool isMeshJobActive = false;
-
+    public bool IsMeshJobActive => isMeshJobActive;
     private NativeList<Vector3> jobVertices;
     private NativeList<int> jobTriangles;
     private NativeList<Vector3> jobUvs;
@@ -34,6 +34,8 @@ public class Chunk : MonoBehaviour
 
     public void InitializeData(Vector3Int coord, int chunkSize, World world)
     {
+        EnsureJobCompleted();
+
         GridCoord = coord;
         size = chunkSize;
         worldRef = world;
@@ -49,6 +51,7 @@ public class Chunk : MonoBehaviour
             if (VoxelData.IsCreated) VoxelData.Dispose();
             VoxelData = new NativeArray<byte>(totalVoxels, Allocator.Persistent);
         }
+
         NativeArray<byte>.Copy(worldRef.EmptyVoxelData, VoxelData, totalVoxels);
 
         if (!jobVertices.IsCreated)

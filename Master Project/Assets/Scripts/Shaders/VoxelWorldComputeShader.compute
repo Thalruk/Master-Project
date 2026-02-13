@@ -16,9 +16,10 @@ float4 permute(float4 x)
 {
     return mod289(((x * 34.0) + 1.0) * x);
 }
+
 float4 taylorInvSqrt(float4 r)
 {
-    return rsqrt(r);;
+    return rsqrt(r);
 }
 
 float snoise(float3 v)
@@ -80,41 +81,52 @@ float snoise(float3 v)
 
 float2 GetDensity(float3 globalPos)
 {
-    float density = 20.0 - globalPos.y;
-    float scale = 0.01;
-    float maxAmplitude = 40.0;
-    int octaves = 3;
-    float persistence = 0.5;
-    float lacunarity = 2.0;
+    float baseHeight = 60.0;
+    float terrainNoise = snoise(float3(globalPos.xz * 0.005, 0.0)) * 30.0;
+    float surfaceHeight = baseHeight + terrainNoise;
 
-    float frequency = scale;
-    float amplitude = maxAmplitude;
-
-    for (int i = 0; i < octaves; i++)
-    {
-        density += snoise(globalPos * frequency) * amplitude;
-        if (abs(density) > 20.0)
-            break;
-        amplitude *= persistence;
-        frequency *= lacunarity;
-    }
-
+    float finalDensity = -1.0;
     float islandDensity = -100.0;
-    float islandMask = snoise(float3(globalPos.x * 0.01, 0, globalPos.z * 0.01));
-
-    if (islandMask > 0.3)
+    
+    if (globalPos.y <= surfaceHeight)
     {
-        float islandCenterHeight = 150.0;
-        float3 warp = float3(snoise(globalPos * 0.03), snoise(globalPos * 0.03 + 1.0), snoise(globalPos * 0.03 + 2.0)) * 15.0;
-        float3 distortedPos = globalPos + warp;
-        float shape = snoise(distortedPos * 0.02) * 30.0;
-        float distFromCenter = globalPos.y - islandCenterHeight;
-        float falloff = (distFromCenter * distFromCenter) * 0.2;
-        islandDensity = shape - falloff;
-        islandDensity *= (islandMask - 0.3) * 5.0;
+        finalDensity = 1.0; 
+
+        float3 cavePos = globalPos * 0.015;
+        
+        float n1 = snoise(cavePos);
+        float n2 = snoise(cavePos + float3(15.3, 75.1, 31.9));
+        float spaghetti = (n1 * n1) + (n2 * n2);
+        
+        float cheese = snoise(globalPos * 0.012);
+
+        float entryNoise = snoise(float3(globalPos.xz * 0.02, 0.0));
+        
+        float depthMask = smoothstep(surfaceHeight + 2.0, surfaceHeight - 10.0, globalPos.y);
+
+        float entranceThreshold = 0.03 + (max(0, entryNoise) * 0.1);
+        
+        bool isSpaghetti = spaghetti < entranceThreshold;
+        bool isCheese = cheese > (0.65 - max(0, entryNoise) * 0.1);
+
+        if (isSpaghetti || (isCheese && depthMask > 0.5))
+        {
+            finalDensity = -1.0;
+        }
+    }
+    else
+    {
+        float skyNoise = snoise(globalPos * 0.04);
+        float skyMask = smoothstep(surfaceHeight + 25.0, surfaceHeight + 60.0, globalPos.y);
+        
+        if (skyNoise > 0.6)
+        {
+            islandDensity = (skyNoise - 0.6) * skyMask * 10.0;
+            finalDensity = islandDensity;
+        }
     }
 
-    return float2(density, islandDensity);
+    return float2(finalDensity, islandDensity);
 }
 
 [numthreads(8, 8, 8)]
@@ -139,20 +151,20 @@ void GenerateVoxelData(uint3 id : SV_DispatchThreadID)
 
         if (currentIsland > currentGround)
         {
-            blockType = 4; // Island Debug Color 
+            blockType = 4; 
         }
         else
         {
-            if (aboveFinal <= 0) // Nad nami jest powietrze
+            if (aboveFinal <= 0) // Air
             {
                 blockType = 1; // Grass
             }
-            else // Nad nami jest inny blok
+            else 
             {
-                if (currentGround > 10)
-                blockType = 3; // Stone
+                if (currentGround > 10.0)
+                    blockType = 3; // Stone
                 else
-                blockType = 2; // Dirt
+                    blockType = 2; // Dirt
             }
         }
     }

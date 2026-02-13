@@ -26,7 +26,7 @@ public class World : MonoBehaviour
     [SerializeField] int chunksToGeneratePerFrame = 25;
     [SerializeField] int chunksToMeshPerFrame = 50;
 
-    Queue<Vector3Int> chunksToGenerate = new Queue<Vector3Int>();
+    List<Vector3Int> chunksToGenerate = new List<Vector3Int>();
 
     HashSet<Chunk> chunksToMesh = new HashSet<Chunk>();
 
@@ -42,7 +42,7 @@ public class World : MonoBehaviour
     private void Start()
     {
         lastPlayerChunk = new Vector3Int(int.MaxValue, int.MaxValue, int.MaxValue);
-        EmptyVoxelData = new NativeArray<byte>(chunkSize * chunkSize * chunkSize, Allocator.Persistent);
+        EmptyVoxelData = new NativeArray<byte>(chunkSize * chunkSize * chunkSize, Allocator.Persistent, NativeArrayOptions.ClearMemory);
         StartCoroutine(WorldWorkerRoutine());
     }
 
@@ -100,16 +100,29 @@ public class World : MonoBehaviour
             if (chunksToGenerate.Count > 0)
             {
                 int generatedCount = 0;
-                while (chunksToGenerate.Count > 0 && generatedCount < chunksToGeneratePerFrame)
+                int itemsToCheck = chunksToGenerate.Count;
+
+                while (itemsToCheck > 0 && generatedCount < chunksToGeneratePerFrame && chunksToGenerate.Count > 0)
                 {
-                    Vector3Int coord = chunksToGenerate.Dequeue();
+                    itemsToCheck--;
+
+                    Vector3Int coord = chunksToGenerate[0];
+                    chunksToGenerate.RemoveAt(0);
 
                     if (chunksInQueue.Contains(coord) && !chunkMap.ContainsKey(coord))
                     {
+                        if (IsNeighborhoodBusy(coord))
+                        {
+                            chunksToGenerate.Add(coord);
+                            continue;
+                        }
+
                         Vector3Int worldPos = new Vector3Int(coord.x * chunkSize, coord.y * chunkSize, coord.z * chunkSize);
+
                         Chunk newChunk = ChunkPool.Instance.GetChunk(worldPos);
                         chunkMap.Add(coord, newChunk);
                         newChunk.InitializeData(coord, chunkSize, this);
+
                         generatedCount++;
                     }
                 }
@@ -138,7 +151,6 @@ public class World : MonoBehaviour
             yield return null;
         }
     }
-
     private void UpdateVisibleWorld(Vector3Int center)
     {
         List<Vector3Int> toRemove = new List<Vector3Int>();
@@ -165,11 +177,21 @@ public class World : MonoBehaviour
             if (chunkMap.ContainsKey(coord))
             {
                 Chunk c = chunkMap[coord];
+                c.EnsureJobCompleted();
                 ChunkPool.Instance.ReturnChunk(c);
                 chunkMap.Remove(coord);
             }
             chunksInQueue.Remove(coord);
         }
+
+        chunksToGenerate.RemoveAll(coord =>
+        {
+            Vector3 rel = new Vector3(coord.x - center.x, coord.y - center.y, coord.z - center.z);
+            float dist = (rel.x * rel.x) / (marginX * marginX) +
+                         (rel.y * rel.y) / (marginY * marginY) +
+                         (rel.z * rel.z) / (marginZ * marginZ);
+            return dist > 1.0f;
+        });
 
         for (int x = -startSize.x; x <= startSize.x; x++)
         {
@@ -187,13 +209,24 @@ public class World : MonoBehaviour
                         if (!chunkMap.ContainsKey(coord) && !chunksInQueue.Contains(coord))
                         {
                             chunksInQueue.Add(coord);
-                            chunksToGenerate.Enqueue(coord);
+                            chunksToGenerate.Add(coord);
                         }
                     }
                 }
             }
         }
+        chunksToGenerate.Sort((a, b) =>
+        {
+            int distSqA = (a.x - center.x) * (a.x - center.x) +
+                          (a.y - center.y) * (a.y - center.y) +
+                          (a.z - center.z) * (a.z - center.z);
+            int distSqB = (b.x - center.x) * (b.x - center.x) +
+                          (b.y - center.y) * (b.y - center.y) +
+                          (b.z - center.z) * (b.z - center.z);
+            return distSqA.CompareTo(distSqB);
+        });
     }
+
 
     public void EnsureNeighborhoodReady(Vector3Int coord)
     {
@@ -205,6 +238,18 @@ public class World : MonoBehaviour
                     Chunk c = GetChunk(coord + new Vector3Int(x, y, z));
                     if (c != null) c.EnsureJobCompleted();
                 }
+    }
+    private bool IsNeighborhoodBusy(Vector3Int coord)
+    {
+        for (int x = -1; x <= 1; x++)
+            for (int y = -1; y <= 1; y++)
+                for (int z = -1; z <= 1; z++)
+                {
+                    if (x == 0 && y == 0 && z == 0) continue;
+                    Chunk c = GetChunk(coord + new Vector3Int(x, y, z));
+                    if (c != null && c.IsMeshJobActive) return true;
+                }
+        return false;
     }
 
     public Chunk GetChunk(Vector3Int coord)
