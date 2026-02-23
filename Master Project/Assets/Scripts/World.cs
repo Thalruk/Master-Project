@@ -113,11 +113,11 @@ public class World : MonoBehaviour
 
                     if (chunksInQueue.Contains(coord) && !chunkMap.ContainsKey(coord))
                     {
-                        if (IsNeighborhoodBusy(coord))
-                        {
-                            chunksToGenerate.Add(coord);
-                            continue;
-                        }
+                        //if (IsNeighborhoodBusy(coord))
+                        //{
+                        //    chunksToGenerate.Add(coord);
+                        //    continue;
+                        //}
 
                         Vector3Int worldPos = new Vector3Int(coord.x * chunkSize, coord.y * chunkSize, coord.z * chunkSize);
 
