@@ -113,11 +113,11 @@ public class World : MonoBehaviour
 
                     if (chunksInQueue.Contains(coord) && !chunkMap.ContainsKey(coord))
                     {
-                        //if (IsNeighborhoodBusy(coord))
-                        //{
-                        //    chunksToGenerate.Add(coord);
-                        //    continue;
-                        //}
+                        if (IsNeighborhoodBusy(coord))
+                        {
+                            chunksToGenerate.Add(coord);
+                            continue;
+                        }
 
                         Vector3Int worldPos = new Vector3Int(coord.x * chunkSize, coord.y * chunkSize, coord.z * chunkSize);
 
@@ -141,9 +141,12 @@ public class World : MonoBehaviour
 
                     if (chunk != null && chunk.IsReady && chunkMap.ContainsKey(chunk.GridCoord))
                     {
-                        chunk.UpdateMesh();
-                        processedChunks.Add(chunk);
-                        meshedCount++;
+                        if (IsNeighborhoodReadyToMesh(chunk.GridCoord))
+                        {
+                            chunk.UpdateMesh();
+                            processedChunks.Add(chunk);
+                            meshedCount++;
+                        }
                     }
                 }
 
@@ -236,7 +239,17 @@ public class World : MonoBehaviour
         });
 
     }
-
+    private bool IsNeighborhoodReadyToMesh(Vector3Int coord)
+    {
+        for (int x = -1; x <= 1; x++)
+            for (int y = -1; y <= 1; y++)
+                for (int z = -1; z <= 1; z++)
+                {
+                    Chunk c = GetChunk(coord + new Vector3Int(x, y, z));
+                    if (c == null || !c.IsReady) return false;
+                }
+        return true;
+    }
 
     public void EnsureNeighborhoodReady(Vector3Int coord)
     {
@@ -301,16 +314,22 @@ public class World : MonoBehaviour
 
     public void RegenerateWorld()
     {
-        StopAllCoroutines();
+
         foreach (var chunk in chunkMap.Values)
         {
-            ChunkPool.Instance.ReturnChunk(chunk);
+            if (chunk != null)
+            {
+                chunk.EnsureJobCompleted();
+                ChunkPool.Instance.ReturnChunk(chunk);
+            }
         }
+
         chunkMap.Clear();
         chunksToGenerate.Clear();
         chunksInQueue.Clear();
         chunksToMesh.Clear();
-        StartCoroutine(WorldWorkerRoutine());
+
+        lastPlayerChunk = new Vector3Int(int.MaxValue, int.MaxValue, int.MaxValue);
     }
 
     private void OnDestroy()
